@@ -121,6 +121,21 @@ SimulationStats MetalBackend::stats() const {
     if (impl_->dirty) { RenderState temporary; const_cast<MetalBackend*>(this)->downloadRenderState(temporary); }
     return impl_->stats;
 }
+void MetalBackend::downloadGrid(GridData& out) {
+    auto& m=*impl_; if (!m.initialized) throw std::logic_error("Initialize Metal before snapshot");
+    const size_t n=static_cast<size_t>(m.config.width)*m.config.height;
+    const auto state=static_cast<const uint32_t*>(m.state[m.current].contents);
+    const auto ticks=static_cast<const uint32_t*>(m.ticks[m.current].contents);
+    const auto fuel=static_cast<const float*>(m.fuel[m.current].contents);
+    const auto moisture=static_cast<const float*>(m.moisture.contents);
+    const auto elevation=static_cast<const float*>(m.elevation.contents);
+    const auto vegetation=static_cast<const float*>(m.vegetation.contents);
+    const auto density=static_cast<const float*>(m.density.contents);
+    out.state.assign(state,state+n); out.burnTicks.assign(ticks,ticks+n); out.fuel.assign(fuel,fuel+n);
+    out.moisture.assign(moisture,moisture+n); out.elevation.assign(elevation,elevation+n);
+    out.vegetation.assign(vegetation,vegetation+n); out.density.assign(density,density+n);
+}
+void MetalBackend::restoreSnapshot(const InitialGrid& grid,uint64_t timestep) { reset(grid); impl_->stats.timestep=timestep; }
 void MetalBackend::applyBrush(BrushTool tool,int x,int y,int radius,float strength) {
     auto& m=*impl_; if (!m.initialized) throw std::logic_error("Initialize Metal before brush");
     if (radius<0 || radius>30 || !std::isfinite(strength) || strength<0) throw std::invalid_argument("Invalid brush parameters");

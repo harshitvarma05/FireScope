@@ -66,7 +66,7 @@ void OpenGLRenderer::setTerrain(const SimulationConfig& config, const InitialGri
     gl::BufferData(0x8893,terrain_.indices().size()*sizeof(uint32_t),terrain_.indices().data(),0x88E4);
 }
 void OpenGLRenderer::draw(int x, int y, int width, int height, const Camera& camera, bool gridLines,
-                          const std::optional<TerrainHit>& hover, int radius) {
+                          const std::optional<TerrainHit>& hover, int radius, int brushTool) {
     glViewport(x,y,width,height); glEnable(GL_DEPTH_TEST); glDisable(GL_BLEND);
     glDepthFunc(GL_LESS);
     gl::UseProgram(program_); gl::ActiveTexture(0x84C0); glBindTexture(GL_TEXTURE_2D,texture_);
@@ -78,6 +78,7 @@ void OpenGLRenderer::draw(int x, int y, int width, int height, const Camera& cam
     gl::Uniform2f(gl::GetUniformLocation(program_,"gridSize"),static_cast<float>(width_),static_cast<float>(height_));
     gl::Uniform1i(gl::GetUniformLocation(program_,"showGrid"),gridLines ? 1 : 0);
     gl::Uniform1i(gl::GetUniformLocation(program_,"brushVisible"),hover ? 1 : 0);
+    gl::Uniform1i(gl::GetUniformLocation(program_,"brushTool"),brushTool);
     if (hover) gl::Uniform3f(gl::GetUniformLocation(program_,"brush"),static_cast<float>(hover->x),static_cast<float>(hover->y),static_cast<float>(radius));
     gl::BindVertexArray(vao_);
     glDrawElements(GL_TRIANGLES,static_cast<int>(terrain_.indices().size()),GL_UNSIGNED_INT,nullptr);

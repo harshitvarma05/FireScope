@@ -32,8 +32,10 @@ are optional: a headless build needs only CMake and a C++17 compiler.
   implemented; compile/runtime/CPU-parity checks and benchmarks await NVIDIA host.
 - M4: Standalone Metal compute, wildfire implementation, exact tested CPU parity,
   reset/brushes, 512² 3D live run and local CPU/Metal benchmark graphs verified.
-- M5: water UI, snapshots and baseline/mitigation comparison pending.
-- M6: measured benchmarks/plots, report, poster and backup video pending.
+- M5: Water UI, full-state snapshots (including logical timestep), restore and
+  baseline-versus-mitigation comparison verified on CPU/Metal. Demo firebreak preset.
+- M6: Mac benchmark CSV/plots exist. NVIDIA results, shared-memory comparison,
+  graphics polish, report, poster and backup video remain pending.
 
 CUDA compiles only when a CUDA compiler is detected; Metal compiles only on Apple
 when enabled. Both can be disabled for a dependency-free CPU headless build.
@@ -91,3 +93,28 @@ floating-point differences but do not prove universal bitwise equality across
 all hardware; the consistency suite verifies explicit scenarios without relaxing
 state/intensity assertions. GPU tests return a distinct skip code when no device
 is visible. The NVIDIA checklist includes memcheck/racecheck.
+
+## Scenario comparison
+
+The snapshot owns copied state, fuel, moisture, elevation, vegetation, density,
+burn ages, config, environment and elapsed timestep. Full GPU readbacks occur only
+for explicit snapshot/comparison actions; the normal frame remains compact.
+Restoring preserves the timestep so hash(seed,x,y,step) reproduces future draws.
+
+Comparison initializes two independent backends from the original and edited
+grids, restores the same timestep and applies the same captured parameters for
+the requested number of steps. It returns baseline/mitigated counts and the final
+mitigated grid for display. The source snapshot is never mutated. The UI requires
+interventions at the captured timestep; advancing simulation disables comparison
+until restore. Controls retain an explicit separation between Reset (seeded fresh
+forest) and Restore (captured scenario).
+
+Tests include snapshots taken after three elapsed steps, future replay, moisture
+readback, identical paired runs, and a known full firebreak on a 31x21 grid: 651
+baseline burned cells versus 315 mitigated burned cells, 21 cleared barrier cells
+and 315 unburned cells. Those deterministic counts pass on CPU and Metal.
+
+The viewer's seeded 128² demo firebreak was also run through the actual UI for
+500 steps: 16,383 baseline burned versus 11,985 mitigated burned (26.8% reduction),
+728 cleared cells and 3,671 unburned cells. Burned-count reduction includes cells
+cleared for the barrier; it should not all be described as forest preserved.

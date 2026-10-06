@@ -15,6 +15,7 @@ template<class T> struct DeviceBuffer {
     ~DeviceBuffer() { if (data) cudaFree(data); }
     void allocate(size_t n) { if (data) { check(cudaFree(data)); data=nullptr; } check(cudaMalloc(reinterpret_cast<void**>(&data),n*sizeof(T))); }
     void upload(const std::vector<T>& values) { check(cudaMemcpy(data,values.data(),values.size()*sizeof(T),cudaMemcpyHostToDevice)); }
+    void download(std::vector<T>& values, size_t count) { values.resize(count); check(cudaMemcpy(values.data(),data,count*sizeof(T),cudaMemcpyDeviceToHost)); }
 };
 }
 struct CUDABackend::Impl {
@@ -87,6 +88,14 @@ SimulationStats CUDABackend::stats() const {
     if (impl_->dirty) { RenderState temporary; const_cast<CUDABackend*>(this)->downloadRenderState(temporary); }
     return impl_->stats;
 }
+void CUDABackend::downloadGrid(GridData& out) {
+    auto& m=*impl_; if (!m.initialized) throw std::logic_error("Initialize CUDA before snapshot");
+    const size_t n=static_cast<size_t>(m.config.width)*m.config.height;
+    m.state[m.current].download(out.state,n); m.fuel[m.current].download(out.fuel,n);
+    m.ticks[m.current].download(out.burnTicks,n); m.moisture.download(out.moisture,n);
+    m.elevation.download(out.elevation,n); m.vegetation.download(out.vegetation,n); m.density.download(out.density,n);
+}
+void CUDABackend::restoreSnapshot(const InitialGrid& grid,uint64_t timestep) { reset(grid); impl_->stats.timestep=timestep; }
 void CUDABackend::applyBrush(BrushTool tool,int x,int y,int radius,float strength) {
     auto& m=*impl_; if (!m.initialized) throw std::logic_error("Initialize CUDA before brush");
     if (radius<0 || radius>30 || !std::isfinite(strength) || strength<0) throw std::invalid_argument("Invalid brush parameters");

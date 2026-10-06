@@ -39,7 +39,11 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
         Camera camera;
         bool gridLines = false;
         std::optional<TerrainHit> hover;
+        std::optional<ScenarioSnapshot> snapshot;
+        std::optional<ComparisonResult> comparison;
+        int comparisonSteps = 500;
         auto reset = [&] {
+            snapshot.reset(); comparison.reset();
             initialGrid = generateScenario(config,params.seed);
             backend->initialize(config,initialGrid);
             renderer.setTerrain(config,initialGrid,params.cellSizeMeters);
@@ -110,7 +114,9 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             ImGui::SliderFloat("Slope effect",&params.slopeStrength,0,8);
             ImGui::Separator();
             ImGui::RadioButton("Ignite",&brush,0); ImGui::SameLine(); ImGui::RadioButton("Firebreak",&brush,1);
+            ImGui::SameLine(); ImGui::RadioButton("Water",&brush,2);
             ImGui::SliderInt("Brush radius",&radius,1,30);
+            if (brush == 2) ImGui::TextWrapped("Water increases moisture up to 1. Existing fire keeps burning.");
             ImGui::TextWrapped("Left-click or drag on terrain to paint.");
             ImGui::Separator();
             int mode = camera.mode() == CameraMode::Orbit ? 0 : 1;
@@ -120,6 +126,50 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             if (ImGui::Button("Reset view")) camera.frame(config.width,config.height,renderer.terrain().centerHeight());
             ImGui::SameLine(); ImGui::Checkbox("Grid lines",&gridLines);
             ImGui::TextWrapped("Right-drag: rotate. Middle-drag: pan. Scroll: zoom. Free fly: WASD, Q/E down/up.");
+            if (ImGui::CollapsingHeader("Scenario comparison")) {
+                if (ImGui::Button("Capture")) {
+                    playing = false; snapshot = captureScenario(*backend,config,params); comparison.reset();
+                }
+                ImGui::SameLine(); ImGui::BeginDisabled(!snapshot);
+                if (ImGui::Button("Restore")) {
+                    playing = false; config = snapshot->config; params = snapshot->params;
+                    seed = params.seed; windDegrees = params.windDirectionRadians*180.0f/3.14159265f;
+                    backend->initialize(config,snapshot->grid);
+                    backend->restoreSnapshot(snapshot->grid,snapshot->timestep);
+                    renderer.setTerrain(config,snapshot->grid,params.cellSizeMeters);
+                    comparison.reset();
+                }
+                ImGui::EndDisabled();
+                ImGui::InputInt("Run steps",&comparisonSteps); comparisonSteps = std::clamp(comparisonSteps,1,5000);
+                const bool ready = snapshot && backend->stats().timestep == snapshot->timestep;
+                ImGui::BeginDisabled(!ready);
+                if (ImGui::Button("Demo firebreak")) {
+                    playing = false;
+                    for (int y = 0; y < static_cast<int>(config.height); y += 3)
+                        backend->applyBrush(BrushTool::Firebreak,static_cast<int>(config.width*3/4),y,3);
+                    backend->applyBrush(BrushTool::Firebreak,static_cast<int>(config.width*3/4),static_cast<int>(config.height)-1,3);
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Paints a north-south firebreak east of the central ignition.");
+                if (ImGui::Button("Compare mitigation")) {
+                    playing = false; GridData edited; backend->downloadGrid(edited);
+                    comparison = compareMitigation(*snapshot,edited,backendName,static_cast<uint32_t>(comparisonSteps));
+                    params = snapshot->params; seed = params.seed;
+                    windDegrees = params.windDirectionRadians*180.0f/3.14159265f;
+                    backend->restoreSnapshot(comparison->mitigatedFinal,comparison->mitigated.timestep);
+                }
+                ImGui::EndDisabled();
+                ImGui::TextWrapped("Capture, paint interventions while paused, then compare. Restore to repeat. Both runs use captured conditions.");
+                if (snapshot && !ready && !comparison) ImGui::TextWrapped("Restore the captured timestep before comparing.");
+                if (comparison) {
+                    ImGui::Text("Baseline burned: %llu",static_cast<unsigned long long>(comparison->baseline.burned));
+                    ImGui::Text("Mitigated burned: %llu",static_cast<unsigned long long>(comparison->mitigated.burned));
+                    const double difference = static_cast<double>(comparison->baseline.burned)-comparison->mitigated.burned;
+                    ImGui::Text("Reduction: %.1f%%",comparison->baseline.burned ? 100.0*difference/comparison->baseline.burned : 0.0);
+                    ImGui::Text("Unburned: %llu",static_cast<unsigned long long>(comparison->mitigated.unburned));
+                    ImGui::Text("No fuel: %llu",static_cast<unsigned long long>(comparison->mitigated.noFuel));
+                    ImGui::TextWrapped("The view shows the mitigated result.");
+                }
+            }
             ImGui::Separator();
             const auto stats = backend->stats();
             ImGui::Text("Timestep: %llu",static_cast<unsigned long long>(stats.timestep));
@@ -160,7 +210,7 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             if (hover && !ImGui::IsMouseDown(1) && !ImGui::IsMouseDown(2) &&
                 (ImGui::IsMouseDown(0) || ImGui::IsMouseClicked(0))) {
                 const int x = static_cast<int>(hover->x), y = static_cast<int>(hover->y);
-                const auto tool = brush == 0 ? BrushTool::Ignite : BrushTool::Firebreak;
+                const auto tool = static_cast<BrushTool>(brush);
                 if (painting && !ImGui::IsMouseClicked(0)) {
                     const int segments = std::max(std::abs(x-previousX),std::abs(y-previousY));
                     for (int segment = 1; segment <= segments; ++segment)
@@ -187,7 +237,7 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             backend->downloadRenderState(renderState); renderer.upload(renderState);
             glViewport(0,0,fw,fh); glClearColor(.035f,.045f,.06f,1); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             renderer.draw(static_cast<int>(left*fw/ww),static_cast<int>((wh-top-viewHeight)*fh/wh),
-                static_cast<int>(viewWidth*fw/ww),static_cast<int>(viewHeight*fh/wh),camera,gridLines,hover,radius);
+                static_cast<int>(viewWidth*fw/ww),static_cast<int>(viewHeight*fh/wh),camera,gridLines,hover,radius,brush);
             ImGui::Render(); ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
             if (smokeTest && glGetError() != GL_NO_ERROR) throw std::runtime_error("OpenGL error in smoke test");
             renderMs = std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-renderStart).count();

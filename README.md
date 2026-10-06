@@ -46,7 +46,8 @@ into the sources and CMake configuration but requires Windows validation.
 - Play / Pause / Step / Reset.
 - Seed (applies on Reset) and 128² / 256² / 512² / 1024² grid selection.
 - Wind speed/direction, humidity, ignition probability and moisture/slope strengths.
-- Ignite / Firebreak brush, radius 1–30. Click/drag on the grid to paint.
+- Ignite / Firebreak / Water brushes, radius 1–30. Click/drag on terrain to paint.
+  Water increases moisture; it does not directly extinguish burning cells.
 - Steps per frame: 1 / 2 / 4 / 8; compact render state downloaded once per frame.
 - Burning, burned, unburned and no-fuel counts, timestep, timing and FPS.
 - Orbit camera: right-drag to rotate, middle-drag to pan, scroll to zoom.
@@ -88,7 +89,8 @@ use `--benchmark` for one warm-up plus five runs and median reporting.
 - M2: 3D terrain, orbit/free-fly camera, depth buffering and ray picking implemented.
 - M3: CUDA source and tests ready; Windows/CUDA runtime checks pending.
 - M4: Metal compute, CPU parity, 512² 3D live run, and CPU/Metal benchmarks verified.
-- M5–M6: scenario comparison, water UI, visual polish and final deliverables remain.
+- M5: Water, full scenario capture/restore and paired mitigation comparison work on CPU/Metal.
+- M6: instanced trees, fire/smoke polish, CUDA shared-memory optimization and final deliverables remain.
 
 See [architecture](docs/architecture.md), [model choices](docs/model.md), and
 [dependencies/attribution](THIRD_PARTY.md). No source from the referenced wildfire
@@ -112,3 +114,19 @@ See [measured results](docs/PERFORMANCE.md) and [NVIDIA validation instructions]
 Plot graphs using `scripts/plot_results.py` after installing
 `scripts/requirements-lock.txt` in a virtual environment. The Mac data and PNG/PDF
 graphs are checked in under `benchmarks/results/`.
+
+## Mitigation demo
+
+1. Choose a backend/grid and set the environmental controls.
+2. Expand **Scenario comparison**, then **Capture** to pause and save the scenario.
+3. Paint a firebreak/wet zone, or select **Demo firebreak** for a complete barrier
+   east of the central ignition. Keep the simulation paused.
+4. Set **Run steps**, then **Compare mitigation**. Both runs use the captured seed,
+   environment and logical timestep; the view shows the final mitigated run.
+5. Read baseline/mitigated burned counts and relative reduction. **Restore** returns
+   to the original snapshot so another intervention can be tested.
+
+Snapshots are held in memory for this session and capture all cell properties and
+burn age. Reset/grid/backend changes discard them. If you advance the simulation
+after capture, restore before comparing. Camera controls remain independent.
+These are educational scenario comparisons, not calibrated forecasts.

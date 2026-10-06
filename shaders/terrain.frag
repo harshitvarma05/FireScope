@@ -5,6 +5,7 @@ uniform sampler2D grid;
 uniform vec2 gridSize;
 uniform vec3 brush; // cell x, cell y, radius
 uniform int brushVisible;
+uniform int brushTool;
 uniform int showGrid;
 out vec4 color;
 void main() {
@@ -25,7 +26,8 @@ void main() {
     if (brushVisible != 0) {
         float d = length(cell-(brush.xy+vec2(0.5)));
         float stroke = 1.0-smoothstep(0.25,0.75,abs(d-brush.z));
-        c = mix(c,vec3(1,0.96,0.72),stroke*0.9);
+        vec3 cursor = brushTool == 2 ? vec3(0.3,0.75,1) : vec3(1,0.96,0.72);
+        c = mix(c,cursor,stroke*0.9);
     }
     color = vec4(c,1);
 }

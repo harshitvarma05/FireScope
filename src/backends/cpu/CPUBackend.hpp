@@ -8,6 +8,8 @@ public:
     void reset(const InitialGrid&) override;
     void step(const EnvironmentParams&, uint32_t stepCount = 1) override;
     void downloadRenderState(RenderState&) override;
+    void downloadGrid(GridData& out) override { out = current_; }
+    void restoreSnapshot(const InitialGrid& grid, uint64_t timestep) override { reset(grid); stats_.timestep = timestep; }
     SimulationStats stats() const override { return stats_; }
     void applyBrush(BrushTool, int x, int y, int radius, float strength = 0.25f) override;
     const GridData& grid() const { return current_; }

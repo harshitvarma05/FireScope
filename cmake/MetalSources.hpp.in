@@ -1,0 +1,4 @@
+#pragma once
+namespace firescope {
+inline constexpr const char* metalSource = R"FIRESCOPE(@FIRESCOPE_METAL_SOURCE@)FIRESCOPE";
+}

@@ -2,7 +2,7 @@
 #include "firescope/GL.hpp"
 #include "firescope/Renderer.hpp"
 #include "firescope/Scenario.hpp"
-#include "CPUBackend.hpp"
+#include "firescope/BackendFactory.hpp"
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
@@ -13,7 +13,7 @@
 #include <string>
 
 namespace firescope {
-int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initialParams, bool smokeTest) {
+int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initialParams, bool smokeTest, const std::string& initialBackend) {
     glfwSetErrorCallback([](int code, const char* message) { std::cerr << "GLFW " << code << ": " << message << '\n'; });
     if (!glfwInit()) throw std::runtime_error("GLFW initialization failed");
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,4); glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,1);
@@ -29,7 +29,9 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
     int result = 0;
     try {
         OpenGLRenderer renderer;
-        std::unique_ptr<ISimulationBackend> backend = std::make_unique<CPUBackend>();
+        auto backend = createBackend(initialBackend);
+        std::string backendName = initialBackend;
+        const auto backends = availableBackends();
         SimulationConfig config = initialConfig;
         EnvironmentParams params = initialParams;
         InitialGrid initialGrid;
@@ -64,7 +66,15 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             ImGui::Begin("FireScope",nullptr,ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
             ImGui::PushItemWidth(panelWidth * 0.48f);
             ImGui::Text("Wildfire propagation"); ImGui::Separator();
-            ImGui::Text("Backend: %s",backend->name());
+            if (ImGui::BeginCombo("Backend",backend->name())) {
+                for (const auto& name : backends) {
+                    if (ImGui::Selectable(name.c_str(),name == backendName)) {
+                        backend = createBackend(name); backendName = name; playing = false; reset();
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("Switching backend resets the seeded scenario.");
             const uint32_t sizes[] = {128,256,512,1024};
             std::string gridLabel = std::to_string(config.width) + " x " + std::to_string(config.height);
             if (ImGui::BeginCombo("Grid",gridLabel.c_str())) {

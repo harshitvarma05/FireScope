@@ -3,8 +3,7 @@
 ```
 Application / ImGui
         |
-ISimulationBackend -> CPUBackend (current)
-        |             CUDABackend / MetalBackend (future)
+ISimulationBackend -> CPUBackend / CUDABackend / MetalBackend
         v
 RenderState (state + intensity, 2 bytes/cell)
         |
@@ -29,14 +28,18 @@ are optional: a headless build needs only CMake and a C++17 compiler.
 - M2: Indexed 3D terrain, smooth normals, directional lighting, model/view/projection,
   depth buffering, orbit/free-fly camera, brush preview, and ray-to-triangle picking.
   Geometry tests and Mac 3D rendering checks pass.
-- M3: CUDA implementation and CPU consistency/benchmark comparison pending.
-- M4: standalone Metal compute test, wildfire port and Mac benchmarking pending.
+- M3: CUDA naive kernel, device allocation, timing, compact output and brushes
+  implemented; compile/runtime/CPU-parity checks and benchmarks await NVIDIA host.
+- M4: Standalone Metal compute, wildfire implementation, exact tested CPU parity,
+  reset/brushes, 512² 3D live run and local CPU/Metal benchmark graphs verified.
 - M5: water UI, snapshots and baseline/mitigation comparison pending.
 - M6: measured benchmarks/plots, report, poster and backup video pending.
 
-CUDA/Metal/OpenMP CMake options reserve the specified configuration names; no
-implementation is enabled yet. Backend CLI requests other than cpu fail clearly.
-No cross-device speedup claims are made from the initial headless runs.
+CUDA compiles only when a CUDA compiler is detected; Metal compiles only on Apple
+when enabled. Both can be disabled for a dependency-free CPU headless build.
+Factory discovery only offers device-supported backends. OpenMP is still optional
+future work. Missing backend requests fail clearly. Measured same-host CPU/Metal
+results are documented in PERFORMANCE.md; CUDA has not yet been validated.
 
 The larger grids are selectable for testing, but 128² remains the development
 default until the GPU and 3D graphics milestones are stable. The final Mac demo
@@ -67,3 +70,24 @@ Logical coordinates are used for picking and scaled framebuffer coordinates for
 OpenGL viewports, including Retina displays. Camera and brushes consume ImGui's
 event-fed mouse coordinates consistently. Orbit/free-fly switching preserves the
 current eye; pitch is limited to avoid lookAt singularities.
+
+## GPU implementation
+
+CUDA uses a plain 16x16 global-memory kernel, paired device state/fuel/age buffers,
+static environment fields, CUDA events and a compact uchar2 render output. Metal
+uses the same algorithm with shared MTLBuffers, compute encoders, 16x16 groups,
+command completion and GPU timestamps. Separate encoders establish tracked buffer
+dependencies between Metal steps; CUDA default-stream ordering does the same.
+
+GPU render packing transfers only two bytes per cell. Host counts are updated on
+compact downloads; a cached stats query avoids redundant readbacks. Brush edits
+execute on the selected GPU. CPU parameters and hash semantics are shared or
+mirrored explicitly; the Metal uniform layout is checked with sizeof/offsetof.
+The CPU owns logical timesteps; GPU dispatch copies that same counter into params.
+
+Metal shader source is embedded by CMake and compiled into a runtime pipeline
+with fast math disabled. CUDA disables FMA contraction. Those choices reduce
+floating-point differences but do not prove universal bitwise equality across
+all hardware; the consistency suite verifies explicit scenarios without relaxing
+state/intensity assertions. GPU tests return a distinct skip code when no device
+is visible. The NVIDIA checklist includes memcheck/racecheck.

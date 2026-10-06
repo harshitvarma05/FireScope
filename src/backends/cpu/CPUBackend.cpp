@@ -1,4 +1,5 @@
 #include "CPUBackend.hpp"
+#include "firescope/Validation.hpp"
 #include "firescope/DeterministicRNG.hpp"
 #include <chrono>
 #include <cmath>
@@ -47,16 +48,7 @@ void CPUBackend::countStates() {
 }
 void CPUBackend::step(const EnvironmentParams& p, uint32_t stepCount) {
     if (!initialized_) throw std::logic_error("Initialize backend before step");
-    const float values[] = {p.baseIgnitionProbability, p.windSpeed, p.windDirectionRadians,
-        p.globalHumidity, p.moistureStrength, p.slopeStrength, p.windStrength,
-        p.windAlignmentStrength, p.fuelConsumptionRate, p.cellSizeMeters};
-    for (float value : values) if (!std::isfinite(value))
-        throw std::invalid_argument("Environment parameters must be finite");
-    if (p.cellSizeMeters <= 0 || p.fuelConsumptionRate < 0 || p.windSpeed < 0 ||
-        p.baseIgnitionProbability < 0 || p.baseIgnitionProbability > 1 ||
-        p.globalHumidity < 0 || p.globalHumidity > 1 || p.moistureStrength < 0 ||
-        p.windStrength < 0 || p.windAlignmentStrength < 0)
-        throw std::invalid_argument("Environment parameter out of range");
+    validateEnvironment(p);
     if (!stepCount) return;
     auto begin = std::chrono::steady_clock::now();
     for (uint32_t step = 0; step < stepCount; ++step) {

@@ -8,6 +8,7 @@ their upstream license files and notices when redistributing builds or source.
 | [GLFW](https://github.com/glfw/glfw) | 3.4 | zlib/libpng | Window, OpenGL context, input |
 | [GLM](https://github.com/g-truc/glm) | 1.0.1 | MIT or Happy Bunny | Graphics mathematics |
 | [Dear ImGui](https://github.com/ocornut/imgui) | v1.91.9b | MIT | GLFW/OpenGL3 user interface |
+| [Matplotlib](https://matplotlib.org/) | 3.10.3 | Matplotlib license (PSF-based) | Optional benchmark graph generation |
 
 ## References
 
@@ -28,3 +29,8 @@ The simulation is an original implementation of the simplified equations in
 The repository's backend interface, CPU implementation, tests, rendering, and
 application glue are authored for FireScope. Add any future adaptations here,
 including upstream revision, license, copied files, and modifications.
+
+Plotting dependencies are recorded in scripts/requirements-lock.txt. Preserve
+licenses from the installed packages when distributing the plotting environment.
+CUDA and Metal SDKs/toolchains are platform-provided dependencies, not vendored
+source; their compute kernels and integration here were authored for FireScope.

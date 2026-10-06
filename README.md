@@ -4,9 +4,9 @@ FireScope is a cross-platform GPU-accelerated wildfire propagation and
 mitigation simulator developed as a combined Computer Graphics/VR and
 Parallel Architecture/GPU Programming college project.
 
-Planned compute backends: serial CPU, NVIDIA CUDA, Apple Metal, optional OpenMP.
-The CPU reference is implemented now. CUDA and Metal follow the CPU/graphics
-milestones in [the specification](docs/PROJECT_SPEC.md).
+Compute backends: serial CPU and Apple Metal (verified on Mac); NVIDIA CUDA
+(implemented, awaiting NVIDIA-machine validation); optional OpenMP remains future
+work. Implementation follows [the specification](docs/PROJECT_SPEC.md).
 
 > Educational prototype, not intended for operational wildfire forecasting.
 
@@ -41,6 +41,8 @@ into the sources and CMake configuration but requires Windows validation.
 
 ## Current controls
 
+- CPU/Metal/CUDA selector shows only backends compiled and available on this device.
+  Switching backend resets the seeded scenario.
 - Play / Pause / Step / Reset.
 - Seed (applies on Reset) and 128² / 256² / 512² / 1024² grid selection.
 - Wind speed/direction, humidity, ignition probability and moisture/slope strengths.
@@ -77,16 +79,36 @@ On Windows the headless executable is `build-headless/Release/FireScope.exe`.
 Headless output is CSV with the columns from the specification. Initialization,
 scenario generation and rendering are excluded from the timed interval. Counts
 are included in simulation time. These single runs are smoke measurements;
-formal benchmarking still needs warm-up, five repeats and median reporting.
+use `--benchmark` for one warm-up plus five runs and median reporting.
 
 ## Milestone status
 
 - M0: Mac CMake/OpenGL 4.1/ImGui triangle verified; Windows verification pending.
 - M1: CPU model and deterministic tests pass; basic texture visualization works.
 - M2: 3D terrain, orbit/free-fly camera, depth buffering and ray picking implemented.
-- M3–M6: CUDA, Metal, scenario comparison, formal benchmarks and final deliverables remain.
+- M3: CUDA source and tests ready; Windows/CUDA runtime checks pending.
+- M4: Metal compute, CPU parity, 512² 3D live run, and CPU/Metal benchmarks verified.
+- M5–M6: scenario comparison, water UI, visual polish and final deliverables remain.
 
 See [architecture](docs/architecture.md), [model choices](docs/model.md), and
 [dependencies/attribution](THIRD_PARTY.md). No source from the referenced wildfire
 repositories has been copied. Repository licensing has not yet been selected by
 the team; third-party dependencies retain their own licenses.
+
+## GPU validation and benchmark results
+
+```sh
+./build/FireScope.app/Contents/MacOS/FireScope --list-backends
+./build/FireScope.app/Contents/MacOS/FireScope --backend metal --grid 512
+python3 scripts/run_benchmarks.py --executable build/FireScope.app/Contents/MacOS/FireScope --backends cpu metal --output benchmarks/results/mac.csv
+```
+
+The default development configuration remains CPU / 128². Metal shader source is
+embedded and compiled at runtime, so the app does not require a working directory
+containing `.metal` files or a separate metallib compiler. GPU discovery/tests
+need device access; a sandbox-skipped test is not validation.
+
+See [measured results](docs/PERFORMANCE.md) and [NVIDIA validation instructions](docs/NVIDIA_VALIDATION.md).
+Plot graphs using `scripts/plot_results.py` after installing
+`scripts/requirements-lock.txt` in a virtual environment. The Mac data and PNG/PDF
+graphs are checked in under `benchmarks/results/`.

@@ -1,0 +1,22 @@
+{
+  "created_utc": "2026-10-06T19:12:40.079385+00:00",
+  "platform": "macOS-27.0-arm64-arm-64bit",
+  "architecture": "arm64",
+  "backends": [
+    "cpu",
+    "metal"
+  ],
+  "grids": [
+    128,
+    256,
+    512,
+    1024
+  ],
+  "steps": 500,
+  "seed": 42,
+  "warmup_runs": 1,
+  "measured_runs": 5,
+  "statistic": "median",
+  "scope": "Headless wall time of synchronous step(batch); excludes initialization, rendering and final GPU readback",
+  "note": "Same-host CPU/GPU comparison. Do not combine CPU baselines from another host for speedup."
+}

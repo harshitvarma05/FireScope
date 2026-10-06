@@ -1,4 +1,5 @@
 /build*/
 .DS_Store
+imgui.ini
 *.csv
 !benchmarks/results/*.csv

@@ -1,54 +1,71 @@
-#include "firescope/GL.hpp"
-#include <imgui.h>
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_opengl3.h>
+#include "firescope/App.hpp"
+#include "firescope/Scenario.hpp"
+#include "CPUBackend.hpp"
+#include <chrono>
+#include <iomanip>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 
+namespace {
+uint32_t number(const std::string& text, uint32_t maximum) {
+    if (text.empty() || text.find_first_not_of("0123456789") != std::string::npos)
+        throw std::invalid_argument("Expected an unsigned integer: " + text);
+    auto n = std::stoull(text);
+    if (n > maximum) throw std::invalid_argument("Value exceeds allowed range: " + text);
+    return static_cast<uint32_t>(n);
+}
+}
 int main(int argc, char** argv) {
-    bool smoke = argc > 1 && std::string(argv[1]) == "--smoke-test";
-    if (!glfwInit()) return 1;
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-    auto* window = glfwCreateWindow(1100, 760, "FireScope", nullptr, nullptr);
-    if (!window) { glfwTerminate(); return 1; }
-    glfwMakeContextCurrent(window);
-    std::cout << "OpenGL: " << glGetString(GL_VERSION) << '\n';
-    glfwSwapInterval(1);
-    firescope::gl::load();
-    namespace gl = firescope::gl;
-    const char* vertex = "#version 410 core\nlayout(location=0) in vec2 p; void main(){gl_Position=vec4(p,0,1);}";
-    const char* fragment = "#version 410 core\nout vec4 color; void main(){color=vec4(1,.35,.08,1);}";
-    unsigned vs = gl::CreateShader(0x8B31), fs = gl::CreateShader(0x8B30);
-    gl::ShaderSource(vs, 1, &vertex, nullptr); gl::CompileShader(vs);
-    gl::ShaderSource(fs, 1, &fragment, nullptr); gl::CompileShader(fs);
-    unsigned program = gl::CreateProgram();
-    gl::AttachShader(program, vs); gl::AttachShader(program, fs); gl::LinkProgram(program);
-    gl::DeleteShader(vs); gl::DeleteShader(fs);
-    float points[] = {-.5f,-.5f,.5f,-.5f,0,.5f};
-    unsigned vao, vbo;
-    gl::GenVertexArrays(1,&vao); gl::BindVertexArray(vao);
-    gl::GenBuffers(1,&vbo); gl::BindBuffer(0x8892,vbo);
-    gl::BufferData(0x8892,sizeof(points),points,0x88E4);
-    gl::VertexAttribPointer(0,2,GL_FLOAT,GL_FALSE,2*sizeof(float),nullptr);
-    gl::EnableVertexAttribArray(0);
-    IMGUI_CHECKVERSION(); ImGui::CreateContext(); ImGui::StyleColorsDark();
-    ImGui_ImplGlfw_InitForOpenGL(window,true); ImGui_ImplOpenGL3_Init("#version 410 core");
-    int frames = 0;
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents(); int w,h; glfwGetFramebufferSize(window,&w,&h);
-        glViewport(0,0,w,h); glClearColor(.04f,.06f,.08f,1); glClear(GL_COLOR_BUFFER_BIT);
-        gl::UseProgram(program); gl::BindVertexArray(vao); glDrawArrays(GL_TRIANGLES,0,3);
-        ImGui_ImplOpenGL3_NewFrame(); ImGui_ImplGlfw_NewFrame(); ImGui::NewFrame();
-        ImGui::Begin("FireScope"); ImGui::Text("Backend: CPU"); ImGui::Text("Grid: 128");
-        ImGui::Button("Play"); ImGui::SameLine(); ImGui::Button("Reset"); ImGui::End();
-        ImGui::Render(); ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-        glfwSwapBuffers(window);
-        if (smoke && ++frames >= 3) break;
+    using namespace firescope;
+    try {
+        SimulationConfig config;
+        EnvironmentParams params;
+        uint32_t steps = 500;
+        bool headless = false, smoke = false, triangle = false;
+        for (int i = 1; i < argc; ++i) {
+            std::string arg = argv[i];
+            auto value = [&]() -> std::string {
+                if (++i >= argc) throw std::invalid_argument("Missing value for " + arg);
+                return argv[i];
+            };
+            if (arg == "--headless") headless = true;
+            else if (arg == "--smoke-test") smoke = true;
+            else if (arg == "--triangle") triangle = true;
+            else if (arg == "--backend") {
+                if (value() != "cpu") throw std::invalid_argument("Only CPU is implemented at this milestone");
+            } else if (arg == "--grid") config.width = config.height = number(value(), 2048);
+            else if (arg == "--seed") params.seed = number(value(), UINT32_MAX);
+            else if (arg == "--steps") steps = number(value(), 1000000);
+            else if (arg == "--help") {
+                std::cout << "FireScope [--backend cpu] [--grid 1..2048] [--seed N] [--steps N]\n"
+                             "          [--headless] [--triangle] [--smoke-test]\n";
+                return 0;
+            } else throw std::invalid_argument("Unknown option: " + arg);
+        }
+        if (!config.width) throw std::invalid_argument("Grid must be nonzero");
+        if (headless) {
+            CPUBackend backend;
+            backend.initialize(config, generateScenario(config, params.seed));
+            backend.applyBrush(BrushTool::Ignite, config.width / 2, config.height / 2, 2);
+            auto begin = std::chrono::steady_clock::now();
+            backend.step(params, steps);
+            auto ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - begin).count();
+            auto stats = backend.stats();
+            std::cout << "backend,device,grid,steps,seed,total_ms,ms_per_step,mcell_updates_per_s,burned_final\n";
+            std::cout << std::fixed << std::setprecision(6) << "cpu,host," << config.width << ',' << steps << ','
+                      << params.seed << ',' << ms << ',' << (steps ? ms / steps : 0) << ','
+                      << (ms > 0 ? static_cast<double>(config.width) * config.height * steps / (ms * 1000) : 0)
+                      << ',' << stats.burned << '\n';
+            return 0;
+        }
+#ifdef FIRESCOPE_BUILD_GUI
+        return triangle ? runTriangle(smoke) : runGui(config, params, smoke);
+#else
+        throw std::invalid_argument("GUI was disabled at build time; use --headless");
+#endif
+    } catch (const std::exception& error) {
+        std::cerr << "FireScope: " << error.what() << '\n';
+        return 1;
     }
-    ImGui_ImplOpenGL3_Shutdown(); ImGui_ImplGlfw_Shutdown(); ImGui::DestroyContext();
-    gl::DeleteBuffers(1,&vbo); gl::DeleteVertexArrays(1,&vao); gl::DeleteProgram(program);
-    glfwDestroyWindow(window); glfwTerminate();
 }

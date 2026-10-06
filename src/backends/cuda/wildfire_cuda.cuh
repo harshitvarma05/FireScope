@@ -47,7 +47,7 @@ __global__ void compactRender(const uint32_t* state, const float* fuel, uchar2* 
         static_cast<unsigned char>(fminf(1.0f,fmaxf(0.15f,fuel[i]))*255.0f) : 0);
 }
 __global__ void paintBrush(uint32_t* state, float* fuel, uint32_t* ticks, float* moisture,
-    uint32_t width, uint32_t height, int cx, int cy, int radius, int tool, float strength) {
+    float* density, float* vegetation, uint32_t width, uint32_t height, int cx, int cy, int radius, int tool, float strength) {
     const int x=blockIdx.x*blockDim.x+threadIdx.x+cx-radius;
     const int y=blockIdx.y*blockDim.y+threadIdx.y+cy-radius;
     if (x<0 || y<0 || x>=static_cast<int>(width) || y>=static_cast<int>(height) ||
@@ -56,5 +56,10 @@ __global__ void paintBrush(uint32_t* state, float* fuel, uint32_t* ticks, float*
     if (tool==0 && state[i]==1 && fuel[i]>0) { state[i]=2; ticks[i]=0; }
     else if (tool==1) { state[i]=0; fuel[i]=0; ticks[i]=0; }
     else if (tool==2) moisture[i]=fminf(1.0f,moisture[i]+strength);
+    else if (tool==3 && state[i]<=1) {
+        const float value=fminf(1.0f,strength);
+        density[i]=value; vegetation[i]=value; fuel[i]=value;
+        state[i]=value>0 ? 1u : 0u; ticks[i]=0;
+    }
 }
 }

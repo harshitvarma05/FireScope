@@ -34,5 +34,5 @@ struct SimulationStats {
     uint64_t noFuel = 0, unburned = 0, burning = 0, burned = 0, timestep = 0;
     double simulationMs = 0.0, renderMs = 0.0, frameMs = 0.0;
 };
-enum class BrushTool { Ignite, Firebreak, Water };
+enum class BrushTool { Ignite, Firebreak, Water, Vegetation };
 }

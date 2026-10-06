@@ -31,11 +31,13 @@ as CUDA validation.
 ```powershell
 compute-sanitizer --tool memcheck .\build-nvidia\Release\test_backend_consistency.exe
 compute-sanitizer --tool racecheck .\build-nvidia\Release\test_backend_consistency.exe
+compute-sanitizer --tool memcheck .\build-nvidia\Release\test_brushes.exe
 ```
 
 The test compares every step of known probability-zero/one and firebreak
 scenarios, a seeded wind/moisture/slope case, brush edits, counts, reset,
 batched steps and odd grid dimensions against CPU. It also runs a 512² case.
+The brush test also checks vegetation regrowth/clearing and water saturation on every available backend.
 If stochastic consistency differs, inspect floating-point evaluation before
 changing the assertion or claiming exact cross-device determinism.
 

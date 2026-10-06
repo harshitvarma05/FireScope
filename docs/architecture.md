@@ -167,3 +167,21 @@ steps. It evaluates the same combined neighbor probability and captures the
 selected cell's probability before each observed update; it cannot reconstruct
 unobserved historical probabilities. Its overhead is explicitly labeled and
 excluded from the headless benchmark path.
+
+
+## Vegetation and moisture tools
+
+An additional RG32F texture stores moisture and density. It refreshes at scenario
+load/restore/comparison or when a water/vegetation stroke ends. Normal frames
+still download only the two-byte state/intensity payload. The moisture overlay
+uses actual cell moisture to tint both ground and foliage; density also controls
+the ground's grass blend. Vegetation strokes rebuild the sampled tree instances
+without rebuilding terrain, changing camera position, or clearing the particle
+pool. Cleared cells can visibly regrow after a positive-density edit.
+
+The nine-test suite passes on CPU/Metal, including odd dimensions, boundary edits,
+water saturation, vegetation clearing/regrowth, preserved burning/burned cells,
+property persistence through buffer swaps and unchanged logical timesteps.
+The live viewer was checked by painting a saturated radius-12 wet zone, clearing
+a radius-12 forest patch (441 NoFuel cells), then regrowing it (NoFuel returns to
+zero). The saved wet-zone/clearing preview is `docs/images/mitigation-tools.png`.

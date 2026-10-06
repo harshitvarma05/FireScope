@@ -3,6 +3,8 @@ in vec2 uv;
 in vec3 surfaceNormal;
 in vec3 worldPosition;
 uniform sampler2D grid;
+uniform sampler2D staticProperties;
+uniform int moistureOverlay;
 uniform sampler2D shadowMap;
 uniform mat4 lightMatrix;
 uniform vec3 cameraPosition;
@@ -38,9 +40,10 @@ void main() {
     float mottling=noise(worldPosition.xz*0.43)*0.65+noise(worldPosition.xz*2.3)*0.25+noise(worldPosition.xz*13.0)*0.1;
     vec3 soil=mix(vec3(0.20,0.145,0.085),vec3(0.40,0.31,0.19),mottling);
     vec3 grass=mix(vec3(0.15,0.21,0.085),vec3(0.31,0.35,0.16),mottling);
+    vec2 properties=texture(staticProperties,uv).rg;
     vec3 rock=mix(vec3(0.28,0.29,0.26),vec3(0.48,0.47,0.40),mottling);
     vec3 c=soil;
-    if (state==1) c=mix(grass,soil,smoothstep(0.65,0.84,noise(worldPosition.xz*0.17)));
+    if (state==1) c=mix(soil,grass,properties.g*(1-smoothstep(0.65,0.84,noise(worldPosition.xz*0.17))));
     c=mix(c,rock,smoothstep(0.12,0.42,1.0-n.y));
     if (state==3) c=mix(vec3(0.075,0.067,0.054),vec3(0.18,0.16,0.13),mottling);
     float visibility=shadow(n);
@@ -49,6 +52,7 @@ void main() {
     if (state==2) c=mix(c,vec3(0.58,0.14,0.018),0.7)+vec3(0.45,0.17,0.015)*data.g;
     float fog=1-exp(-max(length(worldPosition-cameraPosition)-sceneScale*0.65,0.0)/sceneScale*0.085);
     c=mix(c,vec3(0.69,0.76,0.78),clamp(fog,0,0.45));
+    if (moistureOverlay!=0) c=mix(c,vec3(0.12,0.43,0.75),properties.r*0.75);
     vec2 cell=uv*gridSize;
     if (showGrid!=0) {
         vec2 edge=min(fract(cell),1-fract(cell));
@@ -58,7 +62,7 @@ void main() {
     if (brushVisible!=0) {
         float d=length(cell-(brush.xy+vec2(0.5)));
         float stroke=1-smoothstep(0.25,0.75,abs(d-brush.z));
-        c=mix(c,brushTool==2 ? vec3(0.3,0.75,1) : vec3(1,0.96,0.72),stroke*0.9);
+        c=mix(c,brushTool==2 ? vec3(0.3,0.75,1) : (brushTool==3 ? vec3(0.55,1,0.35) : vec3(1,0.96,0.72)),stroke*0.9);
     }
     color=vec4(c,1);
 }

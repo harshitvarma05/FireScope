@@ -46,8 +46,13 @@ into the sources and CMake configuration but requires Windows validation.
 - Play / Pause / Step / Reset.
 - Seed (applies on Reset) and 128² / 256² / 512² / 1024² grid selection.
 - Wind speed/direction, humidity, ignition probability and moisture/slope strengths.
-- Ignite / Firebreak / Water brushes, radius 1–30. Click/drag on terrain to paint.
-  Water increases moisture; it does not directly extinguish burning cells.
+- Ignite / Firebreak / Water / Vegetation brushes, radius 1–30. Click/drag to paint.
+  Water adds the chosen amount per stamp and saturates moisture at 1; it does not
+  directly extinguish existing fires. Vegetation sets fuel, vegetation and density
+  to the chosen value, clears at zero, and can regrow NoFuel cells. It preserves
+  burning and burned cells. Tree instances refresh when the stroke ends.
+- Moisture overlay tints terrain and foliage blue according to actual cell moisture.
+  Selecting Water enables it; the checkbox can turn it off.
 - Steps per frame: 1 / 2 / 4 / 8; compact render state downloaded once per frame.
 - Burning, burned, unburned and no-fuel counts, timestep, timing and FPS.
 - Orbit camera: right-drag to rotate, middle-drag to pan, scroll to zoom.
@@ -98,7 +103,7 @@ use `--benchmark` for one warm-up plus five runs and median reporting.
 - M2: 3D terrain, orbit/free-fly camera, depth buffering and ray picking implemented.
 - M3: CUDA source and tests ready; Windows/CUDA runtime checks pending.
 - M4: Metal compute, CPU parity, 512² 3D live run, and CPU/Metal benchmarks verified.
-- M5: Water, full scenario capture/restore and paired mitigation comparison work on CPU/Metal.
+- M5: Water, vegetation painting, moisture overlay, full scenario capture/restore and paired mitigation comparison work on CPU/Metal.
 - M6: branching instanced trees, leaf cards, shadows, sky, detailed terrain, flame billboards, wind-driven smoke, wind compass and cell inspector implemented.
   CUDA shared-memory optimization, NVIDIA validation and final deliverables remain.
 
@@ -150,3 +155,6 @@ The upgraded renderer takes visual cues from the
 [CIS565 wildfire reference](https://github.com/anthonymansur/CIS565-Final-Project).
 Our trees and shaders are procedural; smoke uses bounded particles. The cellular
 simulation and its benchmark path remain independent of these visual effects.
+
+
+![Wet zone and cleared vegetation](docs/images/mitigation-tools.png)

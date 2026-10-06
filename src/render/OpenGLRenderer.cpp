@@ -111,6 +111,10 @@ OpenGLRenderer::OpenGLRenderer() {
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,0x812F);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,0x812F);
+    glGenTextures(1,&propertiesTexture_); glBindTexture(GL_TEXTURE_2D,propertiesTexture_);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,0x812F); glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,0x812F);
     skyProgram_ = program(shaders::skyVertex,shaders::skyFragment);
     gl::GenFramebuffers(1,&shadowFbo_); gl::BindFramebuffer(0x8D40,shadowFbo_);
     glGenTextures(1,&shadowTexture_); glBindTexture(GL_TEXTURE_2D,shadowTexture_);
@@ -154,7 +158,7 @@ OpenGLRenderer::~OpenGLRenderer() {
     gl::DeleteVertexArrays(1,&treeVao_); gl::DeleteVertexArrays(1,&particleVao_);
     gl::DeleteProgram(treeProgram_); gl::DeleteProgram(particleProgram_); gl::DeleteProgram(skyProgram_);
     gl::DeleteFramebuffers(1,&shadowFbo_); glDeleteTextures(1,&shadowTexture_);
-    glDeleteTextures(1,&texture_); gl::DeleteBuffers(1,&vbo_);
+    glDeleteTextures(1,&propertiesTexture_); glDeleteTextures(1,&texture_); gl::DeleteBuffers(1,&vbo_);
     gl::DeleteBuffers(1,&ebo_); gl::DeleteVertexArrays(1,&vao_); gl::DeleteProgram(program_);
 }
 void OpenGLRenderer::upload(const RenderState& state) {
@@ -182,6 +186,20 @@ void OpenGLRenderer::setTerrain(const SimulationConfig& config, const InitialGri
     smoke_.clear(); burning_.clear(); emission_ = 0; spawnRemainder_ = 0;
     lastVisualTime_ = glfwGetTime();
     cellPositions_.resize(static_cast<size_t>(config.width)*config.height);
+    refreshProperties(config,grid,true);
+    gl::BindVertexArray(vao_);
+    gl::BindBuffer(0x8892,vbo_);
+    gl::BufferData(0x8892,terrain_.vertices().size()*sizeof(TerrainVertex),terrain_.vertices().data(),0x88E4);
+    gl::BindBuffer(0x8893,ebo_);
+    gl::BufferData(0x8893,terrain_.indices().size()*sizeof(uint32_t),terrain_.indices().data(),0x88E4);
+}
+void OpenGLRenderer::refreshProperties(const SimulationConfig& config, const GridData& grid, bool rebuildForest) {
+    std::vector<float> properties(grid.state.size()*2);
+    for (size_t i=0;i<grid.state.size();++i) { properties[i*2]=grid.moisture[i]; properties[i*2+1]=grid.density[i]; }
+    gl::ActiveTexture(0x84C2); glBindTexture(GL_TEXTURE_2D,propertiesTexture_);
+    glTexImage2D(GL_TEXTURE_2D,0,0x8230,config.width,config.height,0,0x8227,GL_FLOAT,properties.data());
+    gl::ActiveTexture(0x84C0);
+    if (!rebuildForest) return;
     std::vector<Instance> trees;
     const uint32_t stride = std::max(1u,static_cast<uint32_t>(std::ceil(std::sqrt(cellPositions_.size()/12000.0))));
     for (uint32_t y = 0; y < config.height; ++y) for (uint32_t x = 0; x < config.width; ++x) {
@@ -217,14 +235,10 @@ void OpenGLRenderer::setTerrain(const SimulationConfig& config, const InitialGri
     treeCount_ = static_cast<int>(trees.size());
     gl::BindBuffer(0x8892,treeInstances_);
     gl::BufferData(0x8892,trees.size()*sizeof(Instance),trees.data(),0x88E4);
-    gl::BindVertexArray(vao_);
-    gl::BindBuffer(0x8892,vbo_);
-    gl::BufferData(0x8892,terrain_.vertices().size()*sizeof(TerrainVertex),terrain_.vertices().data(),0x88E4);
-    gl::BindBuffer(0x8893,ebo_);
-    gl::BufferData(0x8893,terrain_.indices().size()*sizeof(uint32_t),terrain_.indices().data(),0x88E4);
 }
 void OpenGLRenderer::draw(int x, int y, int width, int height, const Camera& camera, bool gridLines,
-                          const std::optional<TerrainHit>& hover, int radius, int brushTool, const EnvironmentParams& params, bool vegetation, bool particles) {
+                          const std::optional<TerrainHit>& hover, int radius, int brushTool, const EnvironmentParams& params, bool vegetation, bool particles, bool moistureOverlay) {
+    moistureOverlay_ = moistureOverlay;
     const auto model = glm::mat4(1), view = camera.view(), projection = camera.projection(static_cast<float>(width)/height);
     glEnable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDepthFunc(GL_LESS); glDepthMask(GL_TRUE);
     gl::ActiveTexture(0x84C0); glBindTexture(GL_TEXTURE_2D,texture_);
@@ -248,7 +262,10 @@ void OpenGLRenderer::draw(int x, int y, int width, int height, const Camera& cam
     glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
     gl::ActiveTexture(0x84C1); glBindTexture(GL_TEXTURE_2D,shadowTexture_);
     gl::ActiveTexture(0x84C0); glBindTexture(GL_TEXTURE_2D,texture_);
+    gl::ActiveTexture(0x84C2); glBindTexture(GL_TEXTURE_2D,propertiesTexture_); gl::ActiveTexture(0x84C0);
     gl::UseProgram(program_); lightingUniforms(program_,camera,false);
+    gl::Uniform1i(gl::GetUniformLocation(program_,"staticProperties"),2);
+    gl::Uniform1i(gl::GetUniformLocation(program_,"moistureOverlay"),moistureOverlay ? 1 : 0);
     gl::UniformMatrix4fv(gl::GetUniformLocation(program_,"model"),1,GL_FALSE,glm::value_ptr(model));
     gl::UniformMatrix4fv(gl::GetUniformLocation(program_,"view"),1,GL_FALSE,glm::value_ptr(view));
     gl::UniformMatrix4fv(gl::GetUniformLocation(program_,"projection"),1,GL_FALSE,glm::value_ptr(projection));
@@ -273,6 +290,8 @@ void OpenGLRenderer::lightingUniforms(unsigned handle, const Camera& camera, boo
 }
 void OpenGLRenderer::drawTrees(const glm::mat4& matrix, const Camera& camera, bool shadow) {
     gl::UseProgram(treeProgram_); lightingUniforms(treeProgram_,camera,shadow);
+    gl::Uniform1i(gl::GetUniformLocation(treeProgram_,"staticProperties"),2);
+    gl::Uniform1i(gl::GetUniformLocation(treeProgram_,"moistureOverlay"),moistureOverlay_ ? 1 : 0);
     gl::UniformMatrix4fv(gl::GetUniformLocation(treeProgram_,"viewProjection"),1,GL_FALSE,glm::value_ptr(matrix));
     gl::BindVertexArray(treeVao_); gl::DrawArraysInstanced(GL_TRIANGLES,0,treeVertexCount_,treeCount_);
 }

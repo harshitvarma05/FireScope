@@ -146,6 +146,7 @@ void MetalBackend::applyBrush(BrushTool tool,int x,int y,int radius,float streng
         [encoder setBuffer:m.ticks[m.current] offset:0 atIndex:2]; [encoder setBuffer:m.moisture offset:0 atIndex:3];
         [encoder setBytes:size length:sizeof(size) atIndex:4]; [encoder setBytes:brush length:sizeof(brush) atIndex:5];
         [encoder setBytes:&strength length:sizeof(strength) atIndex:6];
+        [encoder setBuffer:m.density offset:0 atIndex:7]; [encoder setBuffer:m.vegetation offset:0 atIndex:8];
         const NSUInteger side=radius*2+1;
         [encoder dispatchThreads:MTLSizeMake(side,side,1) threadsPerThreadgroup:MTLSizeMake(16,16,1)];
         [encoder endEncoding]; completed(command); m.dirty=true;

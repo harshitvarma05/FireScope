@@ -123,6 +123,11 @@ void CPUBackend::applyBrush(BrushTool tool, int x, int y, int radius, float stre
                 current_.state[i] = state(CellState::NoFuel); current_.fuel[i] = 0; current_.burnTicks[i] = 0;
             } else if (tool == BrushTool::Water) {
                 current_.moisture[i] = std::min(1.0f, current_.moisture[i] + strength);
+            } else if (tool == BrushTool::Vegetation && current_.state[i] <= state(CellState::Unburned)) {
+                const float density = std::min(1.0f,strength);
+                current_.density[i] = density; current_.vegetation[i] = density; current_.fuel[i] = density;
+                current_.state[i] = density > 0 ? state(CellState::Unburned) : state(CellState::NoFuel);
+                current_.burnTicks[i] = 0;
             }
         }
     }

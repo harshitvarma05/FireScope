@@ -101,7 +101,7 @@ void CUDABackend::applyBrush(BrushTool tool,int x,int y,int radius,float strengt
     if (radius<0 || radius>30 || !std::isfinite(strength) || strength<0) throw std::invalid_argument("Invalid brush parameters");
     const int side=radius*2+1; const dim3 block(16,16),grid((side+15)/16,(side+15)/16);
     paintBrush<<<grid,block>>>(m.state[m.current].data,m.fuel[m.current].data,m.ticks[m.current].data,
-        m.moisture.data,m.config.width,m.config.height,x,y,radius,static_cast<int>(tool),strength);
+        m.moisture.data,m.density.data,m.vegetation.data,m.config.width,m.config.height,x,y,radius,static_cast<int>(tool),strength);
     check(cudaGetLastError()); check(cudaDeviceSynchronize()); m.dirty=true;
 }
 }

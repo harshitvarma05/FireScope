@@ -39,7 +39,7 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
         InitialGrid initialGrid;
         RenderState renderState;
         Camera camera;
-        bool gridLines = false, vegetation = true, particles = true;
+        bool gridLines = false, vegetation = true, particles = true, moistureOverlay = false;
         std::optional<TerrainHit> hover;
         std::optional<ScenarioSnapshot> snapshot;
         std::optional<ComparisonResult> comparison;
@@ -47,7 +47,9 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
         std::optional<std::pair<uint32_t,uint32_t>> inspected;
         GridData inspectedGrid;
         std::optional<float> lastProbability;
+        bool propertiesDirty = false, forestDirty = false;
         auto reset = [&] {
+            propertiesDirty = false; forestDirty = false;
             inspected.reset(); lastProbability.reset();
             snapshot.reset(); comparison.reset();
             initialGrid = generateScenario(config,params.seed);
@@ -60,6 +62,7 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
         bool playing = false;
         int brush = 0, radius = 2, stepsPerFrame = 1;
         uint32_t seed = params.seed;
+        float vegetationStrength = 0.65f, waterStrength = 0.25f;
         float windDegrees = params.windDirectionRadians * 180.0f / 3.14159265f;
         double renderMs = 0;
         int frames = 0;
@@ -130,11 +133,18 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             ImGui::SliderFloat("Slope effect",&params.slopeStrength,0,8);
             ImGui::Separator();
             ImGui::RadioButton("Ignite",&brush,0); ImGui::SameLine(); ImGui::RadioButton("Firebreak",&brush,1);
-            ImGui::SameLine(); ImGui::RadioButton("Water",&brush,2);
-            ImGui::RadioButton("Inspect",&brush,3);
-            ImGui::BeginDisabled(brush == 3); ImGui::SliderInt("Brush radius",&radius,1,30); ImGui::EndDisabled();
-            if (brush == 2) ImGui::TextWrapped("Water increases moisture up to 1. Existing fire keeps burning.");
-            if (brush == 3) ImGui::TextWrapped("Click a cell to pause and inspect. Step to observe its next update.");
+            ImGui::SameLine(); if (ImGui::RadioButton("Water",&brush,2)) moistureOverlay = true;
+            ImGui::RadioButton("Vegetation",&brush,3); ImGui::SameLine(); ImGui::RadioButton("Inspect",&brush,4);
+            ImGui::BeginDisabled(brush == 4); ImGui::SliderInt("Brush radius",&radius,1,30); ImGui::EndDisabled();
+            if (brush == 2) {
+                ImGui::SliderFloat("Water amount",&waterStrength,0,1);
+                ImGui::TextWrapped("Water increases moisture up to 1. Existing fire keeps burning.");
+            }
+            if (brush == 3) {
+                ImGui::SliderFloat("Forest density",&vegetationStrength,0,1);
+                ImGui::TextWrapped("Sets fuel, vegetation and density. Zero clears. Burning/burned cells are preserved.");
+            }
+            if (brush == 4) ImGui::TextWrapped("Click a cell to pause and inspect. Step to observe its next update.");
             else ImGui::TextWrapped("Left-click or drag on terrain to paint.");
             ImGui::Separator();
             int mode = camera.mode() == CameraMode::Orbit ? 0 : 1;
@@ -148,6 +158,8 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
                 camera.rotate(0,-50); camera.zoom(5);
             }
             ImGui::Checkbox("Trees",&vegetation); ImGui::SameLine(); ImGui::Checkbox("Fire / smoke",&particles);
+            ImGui::Checkbox("Moisture overlay",&moistureOverlay);
+            if (moistureOverlay) ImGui::TextDisabled("Blue = moisture: 0 dry / 1 wet");
             ImGui::TextWrapped("Right-drag: rotate. Middle-drag: pan. Scroll: zoom. Free fly: WASD, Q/E down/up.");
             if (ImGui::CollapsingHeader("Scenario comparison")) {
                 if (ImGui::Button("Capture")) {
@@ -179,6 +191,7 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
                     params = snapshot->params; seed = params.seed;
                     windDegrees = params.windDirectionRadians*180.0f/3.14159265f;
                     backend->restoreSnapshot(comparison->mitigatedFinal,comparison->mitigated.timestep);
+                    renderer.refreshProperties(config,comparison->mitigatedFinal,true);
                 }
                 ImGui::EndDisabled();
                 ImGui::TextWrapped("Capture, paint interventions while paused, then compare. Restore to repeat. Both runs use captured conditions.");
@@ -230,11 +243,11 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
                 }
             }
             hover = inputAllowed ? renderer.terrain().intersect(camera.screenRay(mx-left,my-top,viewWidth,viewHeight)) : std::nullopt;
-            if (brush == 3 && hover && ImGui::IsMouseClicked(0)) {
+            if (brush == 4 && hover && ImGui::IsMouseClicked(0)) {
                 playing = false; inspected = {{hover->x,hover->y}}; lastProbability.reset();
                 backend->downloadGrid(inspectedGrid);
             }
-            if (brush != 3 && hover && !ImGui::IsMouseDown(1) && !ImGui::IsMouseDown(2) &&
+            if (brush != 4 && hover && !ImGui::IsMouseDown(1) && !ImGui::IsMouseDown(2) &&
                 (ImGui::IsMouseDown(0) || ImGui::IsMouseClicked(0))) {
                 const int x = static_cast<int>(hover->x), y = static_cast<int>(hover->y);
                 const auto tool = static_cast<BrushTool>(brush);
@@ -242,11 +255,19 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
                     const int segments = std::max(std::abs(x-previousX),std::abs(y-previousY));
                     for (int segment = 1; segment <= segments; ++segment)
                         backend->applyBrush(tool,previousX+(x-previousX)*segment/segments,
-                            previousY+(y-previousY)*segment/segments,radius);
+                            previousY+(y-previousY)*segment/segments,radius,brush == 3 ? vegetationStrength : waterStrength);
                 }
-                backend->applyBrush(tool,x,y,radius);
+                backend->applyBrush(tool,x,y,radius,brush == 3 ? vegetationStrength : waterStrength);
+                if (tool == BrushTool::Water || tool == BrushTool::Vegetation) propertiesDirty = true;
+                if (tool == BrushTool::Vegetation) forestDirty = true;
                 previousX = x; previousY = y; painting = ImGui::IsMouseDown(0);
             } else painting = false;
+            if (propertiesDirty && !ImGui::IsMouseDown(0)) {
+                GridData edited; backend->downloadGrid(edited);
+                renderer.refreshProperties(config,edited,forestDirty);
+                if (inspected) inspectedGrid = edited;
+                propertiesDirty = false; forestDirty = false;
+            }
             if (hover) {
                 ImGui::SetNextWindowPos(ImVec2(left+12,top+12));
                 ImGui::SetNextWindowBgAlpha(0.7f);
@@ -302,7 +323,7 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             backend->downloadRenderState(renderState); renderer.upload(renderState);
             glViewport(0,0,fw,fh); glClearColor(.035f,.045f,.06f,1); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             renderer.draw(static_cast<int>(left*fw/ww),static_cast<int>((wh-top-viewHeight)*fh/wh),
-                static_cast<int>(viewWidth*fw/ww),static_cast<int>(viewHeight*fh/wh),camera,gridLines,hover,radius,brush,params,vegetation,particles);
+                static_cast<int>(viewWidth*fw/ww),static_cast<int>(viewHeight*fh/wh),camera,gridLines,hover,radius,brush,params,vegetation,particles,moistureOverlay);
             ImGui::Render(); ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
             if (smokeTest && glGetError() != GL_NO_ERROR) throw std::runtime_error("OpenGL error in smoke test");
             renderMs = std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-renderStart).count();

@@ -10,11 +10,12 @@ public:
     OpenGLRenderer& operator=(const OpenGLRenderer&) = delete;
     void upload(const RenderState&);
     void setTerrain(const SimulationConfig&, const InitialGrid&, float cellSizeMeters);
+    void refreshProperties(const SimulationConfig&, const GridData&, bool rebuildForest);
     const TerrainMesh& terrain() const { return terrain_; }
     void draw(int x, int y, int width, int height, const Camera&, bool gridLines,
-              const std::optional<TerrainHit>& hover, int radius, int brushTool, const EnvironmentParams&, bool vegetation, bool particles);
+              const std::optional<TerrainHit>& hover, int radius, int brushTool, const EnvironmentParams&, bool vegetation, bool particles, bool moistureOverlay);
 private:
-    unsigned program_ = 0, vao_ = 0, vbo_ = 0, ebo_ = 0, texture_ = 0;
+    unsigned program_ = 0, vao_ = 0, vbo_ = 0, ebo_ = 0, texture_ = 0, propertiesTexture_ = 0;
     uint32_t width_ = 0, height_ = 0;
     TerrainMesh terrain_;
     struct Instance { glm::vec4 positionSize, detail; };
@@ -23,6 +24,7 @@ private:
     unsigned shadowFbo_ = 0, shadowTexture_ = 0;
     glm::mat4 lightMatrix_{1};
     float sceneScale_ = 128;
+    bool moistureOverlay_ = false;
     void drawTrees(const glm::mat4&, const Camera&, bool shadow);
     void lightingUniforms(unsigned, const Camera&, bool shadow);
     unsigned treeVao_ = 0, treeMesh_ = 0, treeInstances_ = 0;

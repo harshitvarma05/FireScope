@@ -36,7 +36,7 @@ probability evaluation may still differ between future CPU/CUDA/Metal backends;
 integer random thresholds alone do not guarantee exact backend agreement.
 
 Burning cells consume fuel each step. They become Burned only when fuel is zero
-and minimumBurnTicks has elapsed. NoFuel and Burned cells are absorbing states.
+and minimumBurnTicks has elapsed. NoFuel and Burned cells are absorbing states during simulation updates.
 Water increases moisture and does not directly extinguish existing fire.
 
 The backend owns elapsed timesteps. EnvironmentParams.timestep is reserved for
@@ -51,3 +51,19 @@ a full firebreak, fuel exhaustion, minimum burn duration, deterministic reset,
 batched steps, cell counts, and paired-seed wind/slope/moisture experiments.
 Paired one-step trials isolate those factors without assuming an outcome for
 every stochastic multi-step scenario.
+
+
+## Vegetation editing
+
+The Vegetation brush assigns the chosen value (clamped to 0–1) to fuel,
+vegetation and density for NoFuel or Unburned cells. Positive values create
+Unburned forest; zero sets NoFuel. Burn age resets to zero. Existing moisture
+and elevation are retained. Burning and Burned cells are preserved by this tool;
+Firebreak remains the explicit tool for clearing an active fire. NoFuel remains
+absorbing during CA steps, but an explicit vegetation edit can regrow it.
+
+Brushes do not advance the logical timestep. The same edit rule exists in CPU,
+CUDA and Metal; CPU/Metal behavior has been verified, CUDA remains pending
+NVIDIA validation. Snapshots capture these edited properties for reproducible
+paired comparisons. Water adds the requested amount per stamp and saturates at
+one; no moisture decay is implemented.

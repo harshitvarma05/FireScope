@@ -59,7 +59,8 @@ kernel void compactRender(device const uint* state [[buffer(0)]],device const fl
 kernel void paintBrush(device uint* state [[buffer(0)]],device float* fuel [[buffer(1)]],
     device uint* ticks [[buffer(2)]],device float* moisture [[buffer(3)]],
     constant uint2& size [[buffer(4)]],constant int4& brush [[buffer(5)]],
-    constant float& strength [[buffer(6)]],uint2 xy [[thread_position_in_grid]]) {
+    constant float& strength [[buffer(6)]],device float* density [[buffer(7)]],
+    device float* vegetation [[buffer(8)]],uint2 xy [[thread_position_in_grid]]) {
     const int x=int(xy.x)+brush.x-brush.z,y=int(xy.y)+brush.y-brush.z;
     if (x<0 || y<0 || x>=int(size.x) || y>=int(size.y) ||
         (x-brush.x)*(x-brush.x)+(y-brush.y)*(y-brush.y)>brush.z*brush.z) return;
@@ -67,4 +68,9 @@ kernel void paintBrush(device uint* state [[buffer(0)]],device float* fuel [[buf
     if (brush.w==0 && state[i]==1 && fuel[i]>0) { state[i]=2; ticks[i]=0; }
     else if (brush.w==1) { state[i]=0; fuel[i]=0; ticks[i]=0; }
     else if (brush.w==2) moisture[i]=min(1.0f,moisture[i]+strength);
+    else if (brush.w==3 && state[i]<=1) {
+        const float value=min(1.0f,strength);
+        density[i]=value; vegetation[i]=value; fuel[i]=value;
+        state[i]=value>0 ? 1u : 0u; ticks[i]=0;
+    }
 }

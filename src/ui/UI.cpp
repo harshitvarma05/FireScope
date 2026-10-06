@@ -2,6 +2,8 @@
 #include "firescope/GL.hpp"
 #include "firescope/Renderer.hpp"
 #include "firescope/Scenario.hpp"
+#include "firescope/CellInspection.hpp"
+#include <cmath>
 #include "firescope/BackendFactory.hpp"
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -37,12 +39,16 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
         InitialGrid initialGrid;
         RenderState renderState;
         Camera camera;
-        bool gridLines = false;
+        bool gridLines = false, vegetation = true, particles = true;
         std::optional<TerrainHit> hover;
         std::optional<ScenarioSnapshot> snapshot;
         std::optional<ComparisonResult> comparison;
         int comparisonSteps = 500;
+        std::optional<std::pair<uint32_t,uint32_t>> inspected;
+        GridData inspectedGrid;
+        std::optional<float> lastProbability;
         auto reset = [&] {
+            inspected.reset(); lastProbability.reset();
             snapshot.reset(); comparison.reset();
             initialGrid = generateScenario(config,params.seed);
             backend->initialize(config,initialGrid);
@@ -59,6 +65,16 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
         int frames = 0;
         bool painting = false;
         int previousX = 0, previousY = 0;
+        auto advance = [&](uint32_t count) {
+            if (!inspected) { backend->step(params,count); return; }
+            // Inspector mode deliberately reads full state; normal rendering stays compact.
+            for (uint32_t i = 0; i < count; ++i) {
+                backend->downloadGrid(inspectedGrid);
+                lastProbability = inspectIgnition(inspectedGrid,config,params,inspected->first,inspected->second).probability;
+                backend->step(params);
+            }
+            backend->downloadGrid(inspectedGrid);
+        };
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
             int fw,fh,ww,wh; glfwGetFramebufferSize(window,&fw,&fh); glfwGetWindowSize(window,&ww,&wh);
@@ -94,7 +110,7 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             ImGui::InputScalar("Seed",ImGuiDataType_U32,&seed);
             ImGui::TextDisabled("Seed applies on Reset");
             if (ImGui::Button(playing ? "Pause" : "Play")) playing = !playing;
-            ImGui::SameLine(); if (ImGui::Button("Step")) backend->step(params);
+            ImGui::SameLine(); if (ImGui::Button("Step")) advance(1);
             ImGui::SameLine(); if (ImGui::Button("Reset")) {
                 params.seed = seed; playing = false; reset();
             }
@@ -115,9 +131,11 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             ImGui::Separator();
             ImGui::RadioButton("Ignite",&brush,0); ImGui::SameLine(); ImGui::RadioButton("Firebreak",&brush,1);
             ImGui::SameLine(); ImGui::RadioButton("Water",&brush,2);
-            ImGui::SliderInt("Brush radius",&radius,1,30);
+            ImGui::RadioButton("Inspect",&brush,3);
+            ImGui::BeginDisabled(brush == 3); ImGui::SliderInt("Brush radius",&radius,1,30); ImGui::EndDisabled();
             if (brush == 2) ImGui::TextWrapped("Water increases moisture up to 1. Existing fire keeps burning.");
-            ImGui::TextWrapped("Left-click or drag on terrain to paint.");
+            if (brush == 3) ImGui::TextWrapped("Click a cell to pause and inspect. Step to observe its next update.");
+            else ImGui::TextWrapped("Left-click or drag on terrain to paint.");
             ImGui::Separator();
             int mode = camera.mode() == CameraMode::Orbit ? 0 : 1;
             if (ImGui::RadioButton("Orbit",&mode,0)) camera.setMode(CameraMode::Orbit);
@@ -125,6 +143,7 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             if (ImGui::RadioButton("Free fly",&mode,1)) camera.setMode(CameraMode::FreeFly);
             if (ImGui::Button("Reset view")) camera.frame(config.width,config.height,renderer.terrain().centerHeight());
             ImGui::SameLine(); ImGui::Checkbox("Grid lines",&gridLines);
+            ImGui::Checkbox("Trees",&vegetation); ImGui::SameLine(); ImGui::Checkbox("Fire / smoke",&particles);
             ImGui::TextWrapped("Right-drag: rotate. Middle-drag: pan. Scroll: zoom. Free fly: WASD, Q/E down/up.");
             if (ImGui::CollapsingHeader("Scenario comparison")) {
                 if (ImGui::Button("Capture")) {
@@ -132,7 +151,7 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
                 }
                 ImGui::SameLine(); ImGui::BeginDisabled(!snapshot);
                 if (ImGui::Button("Restore")) {
-                    playing = false; config = snapshot->config; params = snapshot->params;
+                    playing = false; inspected.reset(); lastProbability.reset(); config = snapshot->config; params = snapshot->params;
                     seed = params.seed; windDegrees = params.windDirectionRadians*180.0f/3.14159265f;
                     backend->initialize(config,snapshot->grid);
                     backend->restoreSnapshot(snapshot->grid,snapshot->timestep);
@@ -151,7 +170,7 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
                 }
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("Paints a north-south firebreak east of the central ignition.");
                 if (ImGui::Button("Compare mitigation")) {
-                    playing = false; GridData edited; backend->downloadGrid(edited);
+                    playing = false; inspected.reset(); lastProbability.reset(); GridData edited; backend->downloadGrid(edited);
                     comparison = compareMitigation(*snapshot,edited,backendName,static_cast<uint32_t>(comparisonSteps));
                     params = snapshot->params; seed = params.seed;
                     windDegrees = params.windDirectionRadians*180.0f/3.14159265f;
@@ -207,7 +226,11 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
                 }
             }
             hover = inputAllowed ? renderer.terrain().intersect(camera.screenRay(mx-left,my-top,viewWidth,viewHeight)) : std::nullopt;
-            if (hover && !ImGui::IsMouseDown(1) && !ImGui::IsMouseDown(2) &&
+            if (brush == 3 && hover && ImGui::IsMouseClicked(0)) {
+                playing = false; inspected = {{hover->x,hover->y}}; lastProbability.reset();
+                backend->downloadGrid(inspectedGrid);
+            }
+            if (brush != 3 && hover && !ImGui::IsMouseDown(1) && !ImGui::IsMouseDown(2) &&
                 (ImGui::IsMouseDown(0) || ImGui::IsMouseClicked(0))) {
                 const int x = static_cast<int>(hover->x), y = static_cast<int>(hover->y);
                 const auto tool = static_cast<BrushTool>(brush);
@@ -229,15 +252,53 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
                 ImGui::End();
             }
             if (playing) {
-                backend->step(params,stepsPerFrame);
+                advance(stepsPerFrame);
                 if (!backend->stats().burning) playing = false;
             }
-            if (smokeTest) backend->step(params);
+            if (smokeTest) advance(1);
+            ImGui::SetNextWindowPos(ImVec2(left+viewWidth-162,top+12));
+            ImGui::SetNextWindowBgAlpha(0.65f);
+            ImGui::Begin("Wind",nullptr,ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoSavedSettings);
+            ImGui::Text("Wind %.1f m/s",params.windSpeed);
+            const ImVec2 origin = ImGui::GetCursorScreenPos(), center(origin.x+62,origin.y+40);
+            auto* draw = ImGui::GetWindowDrawList();
+            draw->AddCircle(center,27,IM_COL32(90,110,130,255));
+            draw->AddText(ImVec2(center.x-4,center.y-40),IM_COL32_WHITE,"N");
+            draw->AddText(ImVec2(center.x+34,center.y-7),IM_COL32_WHITE,"E");
+            const ImVec2 direction(std::cos(params.windDirectionRadians),-std::sin(params.windDirectionRadians));
+            const ImVec2 end(center.x+direction.x*25,center.y+direction.y*25);
+            draw->AddLine(center,end,IM_COL32(130,200,255,255),2);
+            draw->AddTriangleFilled(end,ImVec2(end.x-direction.x*8-direction.y*4,end.y-direction.y*8+direction.x*4),
+                ImVec2(end.x-direction.x*8+direction.y*4,end.y-direction.y*8-direction.x*4),IM_COL32(130,200,255,255));
+            ImGui::Dummy(ImVec2(130,80)); ImGui::End();
+            if (inspected) {
+                ImGui::SetNextWindowPos(ImVec2(left+12,top+65),ImGuiCond_Always);
+                ImGui::SetNextWindowBgAlpha(0.85f);
+                bool open = true;
+                ImGui::Begin("Cell inspector",&open,ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings);
+                const auto [x,y] = *inspected; const size_t i = static_cast<size_t>(y)*config.width+x;
+                const char* states[] = {"No fuel","Unburned","Burning","Burned"};
+                const auto probe = inspectIgnition(inspectedGrid,config,params,x,y);
+                ImGui::Text("Cell %u, %u | step %llu",x,y,static_cast<unsigned long long>(backend->stats().timestep));
+                ImGui::Text("State: %s",states[inspectedGrid.state[i]]);
+                ImGui::Text("Fuel %.3f | Moisture %.3f",inspectedGrid.fuel[i],inspectedGrid.moisture[i]);
+                ImGui::Text("Elevation %.1f m",inspectedGrid.elevation[i]);
+                ImGui::Text("Vegetation %.3f | Density %.3f",inspectedGrid.vegetation[i],inspectedGrid.density[i]);
+                ImGui::Text("Burn age: %u steps",inspectedGrid.burnTicks[i]);
+                ImGui::Text("Burning neighbors: %u",probe.burningNeighbors);
+                ImGui::Text("Next ignition probability: %.4f",probe.probability);
+                if (lastProbability) ImGui::Text("Last observed probability: %.4f",*lastProbability);
+                else ImGui::TextDisabled("Last probability: step to observe");
+                if (ImGui::Button("Refresh")) backend->downloadGrid(inspectedGrid);
+                ImGui::TextDisabled("Inspector readback adds overhead.");
+                ImGui::End(); if (!open) { inspected.reset(); lastProbability.reset(); }
+            }
             auto renderStart = std::chrono::steady_clock::now();
             backend->downloadRenderState(renderState); renderer.upload(renderState);
             glViewport(0,0,fw,fh); glClearColor(.035f,.045f,.06f,1); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             renderer.draw(static_cast<int>(left*fw/ww),static_cast<int>((wh-top-viewHeight)*fh/wh),
-                static_cast<int>(viewWidth*fw/ww),static_cast<int>(viewHeight*fh/wh),camera,gridLines,hover,radius,brush);
+                static_cast<int>(viewWidth*fw/ww),static_cast<int>(viewHeight*fh/wh),camera,gridLines,hover,radius,brush,params,vegetation,particles);
             ImGui::Render(); ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
             if (smokeTest && glGetError() != GL_NO_ERROR) throw std::runtime_error("OpenGL error in smoke test");
             renderMs = std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-renderStart).count();

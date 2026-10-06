@@ -54,6 +54,12 @@ into the sources and CMake configuration but requires Windows validation.
 - Free-fly camera: right-drag to look, WASD to move, Q/E down/up.
 - Reset view reframes the terrain; Grid lines toggles the cell overlay.
 - A terrain cursor shows the picked cell and elevation; the ring previews brush radius.
+- Trees and Fire / smoke toggles control the instanced forest and bounded visual effects.
+- A wind compass shows east/north direction and speed.
+- Inspect pauses on cell selection and shows state, fuel, moisture, elevation,
+  vegetation, density, burn age, burning neighbors and combined ignition probability.
+  Step records the selected cell's last observed probability. Inspector readbacks
+  add overhead; close the inspector for normal performance measurements.
 - Escape closes the window.
 
 Reset restores the seeded forest and the same central ignition, clears painted
@@ -90,7 +96,8 @@ use `--benchmark` for one warm-up plus five runs and median reporting.
 - M3: CUDA source and tests ready; Windows/CUDA runtime checks pending.
 - M4: Metal compute, CPU parity, 512² 3D live run, and CPU/Metal benchmarks verified.
 - M5: Water, full scenario capture/restore and paired mitigation comparison work on CPU/Metal.
-- M6: instanced trees, fire/smoke polish, CUDA shared-memory optimization and final deliverables remain.
+- M6: instanced trees, flame billboards, wind-driven smoke, wind compass and cell inspector implemented.
+  CUDA shared-memory optimization, NVIDIA validation and final deliverables remain.
 
 See [architecture](docs/architecture.md), [model choices](docs/model.md), and
 [dependencies/attribution](THIRD_PARTY.md). No source from the referenced wildfire

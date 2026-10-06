@@ -2,4 +2,8 @@
 namespace firescope::shaders {
 inline constexpr const char* terrainVertex = R"FIRESCOPE(@FIRESCOPE_TERRAIN_VERTEX@)FIRESCOPE";
 inline constexpr const char* terrainFragment = R"FIRESCOPE(@FIRESCOPE_TERRAIN_FRAGMENT@)FIRESCOPE";
+inline constexpr const char* vegetationVertex = R"FIRESCOPE(@FIRESCOPE_vegetation_VERTEX@)FIRESCOPE";
+inline constexpr const char* vegetationFragment = R"FIRESCOPE(@FIRESCOPE_vegetation_FRAGMENT@)FIRESCOPE";
+inline constexpr const char* billboardVertex = R"FIRESCOPE(@FIRESCOPE_billboard_VERTEX@)FIRESCOPE";
+inline constexpr const char* billboardFragment = R"FIRESCOPE(@FIRESCOPE_billboard_FRAGMENT@)FIRESCOPE";
 }

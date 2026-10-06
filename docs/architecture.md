@@ -118,3 +118,27 @@ The viewer's seeded 128² demo firebreak was also run through the actual UI for
 500 steps: 16,383 baseline burned versus 11,985 mitigated burned (26.8% reduction),
 728 cleared cells and 3,671 unburned cells. Burned-count reduction includes cells
 cleared for the barrier; it should not all be described as forest preserved.
+
+
+## Forest and particles
+
+The OpenGL 4.1 renderer uses one instanced draw for six-sided trunks and layered
+cone canopies. Each instance has a position, scale, yaw and cell UV; the state
+texture removes cleared trees and darkens burning/burned trees. Trees sample the
+forest at a stride targeting roughly 20,000 candidates, with density determining
+which candidates are emitted. Terrain cell centers use the same diagonal as the
+rendered/picked mesh so tree roots lie on its surface.
+
+Flames and smoke are camera-facing quads rendered in one instanced draw, sorted
+back to front with alpha blending, depth testing and depth writes disabled.
+There are at most 2,048 flame instances and 4,096 smoke particles. Smoke emission
+is limited to 500 particles/second. Smoke has position, velocity, age, opacity and
+size; its motion combines upward drift, wind velocity converted from meters to
+cells, and sinusoidal turbulence. Visual time does not affect the simulation's
+seed or timestep. Toggling particles off clears the visual particle pool.
+
+The cell inspector downloads full state only when requested or while observing
+steps. It evaluates the same combined neighbor probability and captures the
+selected cell's probability before each observed update; it cannot reconstruct
+unobserved historical probabilities. Its overhead is explicitly labeled and
+excluded from the headless benchmark path.

@@ -52,6 +52,8 @@ FS_GL(void, Uniform1i, int, int);
 FS_GL(void, Uniform2f, int, float, float);
 FS_GL(void, Uniform3f, int, float, float, float);
 FS_GL(void, ActiveTexture, unsigned);
+FS_GL(void, VertexAttribDivisor, unsigned, unsigned);
+FS_GL(void, DrawArraysInstanced, unsigned, int, int, int);
 #undef FS_GL
 inline void load() {
 #define FS_LOAD(name) name = reinterpret_cast<decltype(name)>(glfwGetProcAddress("gl" #name)); if (!name) throw std::runtime_error("Missing OpenGL function: gl" #name)
@@ -65,6 +67,7 @@ inline void load() {
     FS_LOAD(EnableVertexAttribArray); FS_LOAD(GetUniformLocation);
     FS_LOAD(UniformMatrix4fv); FS_LOAD(Uniform1i); FS_LOAD(ActiveTexture);
     FS_LOAD(Uniform2f); FS_LOAD(Uniform3f);
+    FS_LOAD(VertexAttribDivisor); FS_LOAD(DrawArraysInstanced);
 #undef FS_LOAD
 }
 }

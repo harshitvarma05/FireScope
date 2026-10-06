@@ -40,6 +40,8 @@ FS_GL(void, EnableVertexAttribArray, unsigned);
 FS_GL(int, GetUniformLocation, unsigned, const char*);
 FS_GL(void, UniformMatrix4fv, int, int, unsigned char, const float*);
 FS_GL(void, Uniform1i, int, int);
+FS_GL(void, Uniform2f, int, float, float);
+FS_GL(void, Uniform3f, int, float, float, float);
 FS_GL(void, ActiveTexture, unsigned);
 #undef FS_GL
 inline void load() {
@@ -53,6 +55,7 @@ inline void load() {
     FS_LOAD(BufferData); FS_LOAD(DeleteBuffers); FS_LOAD(VertexAttribPointer);
     FS_LOAD(EnableVertexAttribArray); FS_LOAD(GetUniformLocation);
     FS_LOAD(UniformMatrix4fv); FS_LOAD(Uniform1i); FS_LOAD(ActiveTexture);
+    FS_LOAD(Uniform2f); FS_LOAD(Uniform3f);
 #undef FS_LOAD
 }
 }

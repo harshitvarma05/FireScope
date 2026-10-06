@@ -47,12 +47,17 @@ into the sources and CMake configuration but requires Windows validation.
 - Ignite / Firebreak brush, radius 1–30. Click/drag on the grid to paint.
 - Steps per frame: 1 / 2 / 4 / 8; compact render state downloaded once per frame.
 - Burning, burned, unburned and no-fuel counts, timestep, timing and FPS.
+- Orbit camera: right-drag to rotate, middle-drag to pan, scroll to zoom.
+- Free-fly camera: right-drag to look, WASD to move, Q/E down/up.
+- Reset view reframes the terrain; Grid lines toggles the cell overlay.
+- A terrain cursor shows the picked cell and elevation; the ring previews brush radius.
 - Escape closes the window.
 
 Reset restores the seeded forest and the same central ignition, clears painted
 edits and pauses. It retains the current environment controls. 0° wind blows east;
 90° blows north. Green means unburned, orange burning, charcoal burned, brown no fuel.
-This first viewer is intentionally a flat texture; 3D terrain/camera are M2.
+The viewer now renders a lit 3D heightfield with perspective projection and depth
+buffering. Ray picking intersects the actual terrain triangles before painting.
 
 Use `--triangle` to replay the original OpenGL/ImGui skeleton.
 Use `--smoke-test` to run five simulation/render frames and check OpenGL errors.
@@ -78,7 +83,8 @@ formal benchmarking still needs warm-up, five repeats and median reporting.
 
 - M0: Mac CMake/OpenGL 4.1/ImGui triangle verified; Windows verification pending.
 - M1: CPU model and deterministic tests pass; basic texture visualization works.
-- M2–M6: 3D graphics, CUDA, Metal, scenario comparison, formal benchmarks and final deliverables remain.
+- M2: 3D terrain, orbit/free-fly camera, depth buffering and ray picking implemented.
+- M3–M6: CUDA, Metal, scenario comparison, formal benchmarks and final deliverables remain.
 
 See [architecture](docs/architecture.md), [model choices](docs/model.md), and
 [dependencies/attribution](THIRD_PARTY.md). No source from the referenced wildfire

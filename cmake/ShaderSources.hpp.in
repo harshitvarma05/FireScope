@@ -1,0 +1,5 @@
+#pragma once
+namespace firescope::shaders {
+inline constexpr const char* terrainVertex = R"FIRESCOPE(@FIRESCOPE_TERRAIN_VERTEX@)FIRESCOPE";
+inline constexpr const char* terrainFragment = R"FIRESCOPE(@FIRESCOPE_TERRAIN_FRAGMENT@)FIRESCOPE";
+}

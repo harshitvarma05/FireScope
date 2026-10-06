@@ -49,6 +49,12 @@ FS_GL(void, EnableVertexAttribArray, unsigned);
 FS_GL(int, GetUniformLocation, unsigned, const char*);
 FS_GL(void, UniformMatrix4fv, int, int, unsigned char, const float*);
 FS_GL(void, Uniform1i, int, int);
+FS_GL(void, Uniform1f, int, float);
+FS_GL(void, GenFramebuffers, int, unsigned*);
+FS_GL(void, BindFramebuffer, unsigned, unsigned);
+FS_GL(void, FramebufferTexture2D, unsigned, unsigned, unsigned, unsigned, int);
+FS_GL(unsigned, CheckFramebufferStatus, unsigned);
+FS_GL(void, DeleteFramebuffers, int, const unsigned*);
 FS_GL(void, Uniform2f, int, float, float);
 FS_GL(void, Uniform3f, int, float, float, float);
 FS_GL(void, ActiveTexture, unsigned);
@@ -66,7 +72,9 @@ inline void load() {
     FS_LOAD(BufferData); FS_LOAD(DeleteBuffers); FS_LOAD(VertexAttribPointer);
     FS_LOAD(EnableVertexAttribArray); FS_LOAD(GetUniformLocation);
     FS_LOAD(UniformMatrix4fv); FS_LOAD(Uniform1i); FS_LOAD(ActiveTexture);
-    FS_LOAD(Uniform2f); FS_LOAD(Uniform3f);
+    FS_LOAD(Uniform2f); FS_LOAD(Uniform3f); FS_LOAD(Uniform1f);
+    FS_LOAD(GenFramebuffers); FS_LOAD(BindFramebuffer); FS_LOAD(FramebufferTexture2D);
+    FS_LOAD(CheckFramebufferStatus); FS_LOAD(DeleteFramebuffers);
     FS_LOAD(VertexAttribDivisor); FS_LOAD(DrawArraysInstanced);
 #undef FS_LOAD
 }

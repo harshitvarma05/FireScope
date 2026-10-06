@@ -54,7 +54,10 @@ into the sources and CMake configuration but requires Windows validation.
 - Free-fly camera: right-drag to look, WASD to move, Q/E down/up.
 - Reset view reframes the terrain; Grid lines toggles the cell overlay.
 - A terrain cursor shows the picked cell and elevation; the ring previews brush radius.
-- Trees and Fire / smoke toggles control the instanced forest and bounded visual effects.
+- Trees and Fire / smoke toggles control the branching forest, animated leaf cards,
+  flames, glow and wind-driven smoke. Trees lose foliage as cells burn.
+- Forest view gives a closer, lower-angle orbit view; Reset view restores full framing.
+- Terrain uses procedural soil/grass/rock detail, directional shadows and atmospheric haze.
 - A wind compass shows east/north direction and speed.
 - Inspect pauses on cell selection and shows state, fuel, moisture, elevation,
   vegetation, density, burn age, burning neighbors and combined ignition probability.
@@ -96,7 +99,7 @@ use `--benchmark` for one warm-up plus five runs and median reporting.
 - M3: CUDA source and tests ready; Windows/CUDA runtime checks pending.
 - M4: Metal compute, CPU parity, 512² 3D live run, and CPU/Metal benchmarks verified.
 - M5: Water, full scenario capture/restore and paired mitigation comparison work on CPU/Metal.
-- M6: instanced trees, flame billboards, wind-driven smoke, wind compass and cell inspector implemented.
+- M6: branching instanced trees, leaf cards, shadows, sky, detailed terrain, flame billboards, wind-driven smoke, wind compass and cell inspector implemented.
   CUDA shared-memory optimization, NVIDIA validation and final deliverables remain.
 
 See [architecture](docs/architecture.md), [model choices](docs/model.md), and
@@ -137,3 +140,13 @@ Snapshots are held in memory for this session and capture all cell properties an
 burn age. Reset/grid/backend changes discard them. If you advance the simulation
 after capture, restore before comparing. Camera controls remain independent.
 These are educational scenario comparisons, not calibrated forecasts.
+
+
+## Graphics preview
+
+![FireScope forest fire at timestep 55](docs/images/realistic-forest-fire.png)
+
+The upgraded renderer takes visual cues from the
+[CIS565 wildfire reference](https://github.com/anthonymansur/CIS565-Final-Project).
+Our trees and shaders are procedural; smoke uses bounded particles. The cellular
+simulation and its benchmark path remain independent of these visual effects.

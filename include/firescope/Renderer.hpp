@@ -19,7 +19,12 @@ private:
     TerrainMesh terrain_;
     struct Instance { glm::vec4 positionSize, detail; };
     struct Smoke { glm::vec3 position, velocity; float age, lifetime, size; };
-    unsigned treeProgram_ = 0, particleProgram_ = 0;
+    unsigned treeProgram_ = 0, particleProgram_ = 0, skyProgram_ = 0;
+    unsigned shadowFbo_ = 0, shadowTexture_ = 0;
+    glm::mat4 lightMatrix_{1};
+    float sceneScale_ = 128;
+    void drawTrees(const glm::mat4&, const Camera&, bool shadow);
+    void lightingUniforms(unsigned, const Camera&, bool shadow);
     unsigned treeVao_ = 0, treeMesh_ = 0, treeInstances_ = 0;
     unsigned particleVao_ = 0, particleMesh_ = 0, particleInstances_ = 0;
     int treeVertexCount_ = 0, treeCount_ = 0;

@@ -143,6 +143,10 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             if (ImGui::RadioButton("Free fly",&mode,1)) camera.setMode(CameraMode::FreeFly);
             if (ImGui::Button("Reset view")) camera.frame(config.width,config.height,renderer.terrain().centerHeight());
             ImGui::SameLine(); ImGui::Checkbox("Grid lines",&gridLines);
+            if (ImGui::Button("Forest view")) {
+                camera.setMode(CameraMode::Orbit); camera.frame(config.width,config.height,renderer.terrain().centerHeight());
+                camera.rotate(0,-50); camera.zoom(5);
+            }
             ImGui::Checkbox("Trees",&vegetation); ImGui::SameLine(); ImGui::Checkbox("Fire / smoke",&particles);
             ImGui::TextWrapped("Right-drag: rotate. Middle-drag: pan. Scroll: zoom. Free fly: WASD, Q/E down/up.");
             if (ImGui::CollapsingHeader("Scenario comparison")) {

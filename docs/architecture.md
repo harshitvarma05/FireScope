@@ -122,20 +122,45 @@ cleared for the barrier; it should not all be described as forest preserved.
 
 ## Forest and particles
 
-The OpenGL 4.1 renderer uses one instanced draw for six-sided trunks and layered
-cone canopies. Each instance has a position, scale, yaw and cell UV; the state
-texture removes cleared trees and darkens burning/burned trees. Trees sample the
-forest at a stride targeting roughly 20,000 candidates, with density determining
-which candidates are emitted. Terrain cell centers use the same diagonal as the
-rendered/picked mesh so tree roots lie on its surface.
+The OpenGL 4.1 renderer builds an original procedural tree mesh from tapered
+six-sided trunk segments, primary branches, twigs and leaf cards. Leaf fragments
+use a pointed silhouette and vein shading. Each instance has a position, scale,
+yaw, cell UV and color variety. One randomly selected cell within each sampling
+block breaks up regular rows; roots interpolate the exact terrain triangle.
+Density determines which candidates are emitted. The stride targets no more than
+roughly 12,000 candidates (rounding upward reduces the count further).
 
-Flames and smoke are camera-facing quads rendered in one instanced draw, sorted
-back to front with alpha blending, depth testing and depth writes disabled.
-There are at most 2,048 flame instances and 4,096 smoke particles. Smoke emission
-is limited to 500 particles/second. Smoke has position, velocity, age, opacity and
-size; its motion combines upward drift, wind velocity converted from meters to
-cells, and sinusoidal turbulence. Visual time does not affect the simulation's
-seed or timestep. Toggling particles off clears the visual particle pool.
+The state texture removes cleared trees, progressively sheds burning foliage as
+fuel decreases, and leaves bare charred branches in burned cells. Visual leaf
+movement uses a separate clock and does not alter simulation fields. Branch
+geometry is representative, not part of the cellular combustion calculation.
+
+A 2048² depth map renders terrain and alpha-cut vegetation from a directional
+light. The camera pass applies a 3×3 percentage-closer shadow filter, warm direct
+light, cool ambient light and distance haze. Procedural ground noise blends soil,
+grass and slope-dependent rock. A fullscreen sky pass adds a horizon gradient,
+sun and cloud variation. Sky/shadow programs are embedded alongside the terrain
+shaders, preserving working-directory-independent launches.
+
+Flames, glow and smoke are camera-facing quads rendered in one instanced draw,
+sorted by camera depth, with alpha blending, depth testing and depth writes
+disabled. There are at most 2,048 flames, 2,048 glow instances and 4,096 smoke
+particles. Smoke emission is limited to 500 particles/second. Smoke has position,
+velocity, age, opacity and size; motion combines upward drift, wind velocity
+converted from meters to cells, and sinusoidal turbulence. Noise-shaped fragment
+opacity and shading produce less uniform smoke; animated turbulence creates
+flame tongues. This remains a bounded particle approximation, not a volumetric
+fluid solver or the reference repository's ray-marched smoke model.
+
+Visual time does not affect the simulation's seed or timestep. Toggling particles
+off clears the pool. The new **Forest view** control provides a closer, lower
+orbit angle; **Reset view** restores the complete terrain framing. The tree and
+particle toggles remain available for examining terrain or reducing graphics cost.
+
+Live validation included the seeded 128² forest, manual stepping to timestep 55,
+a close view of burning and charred trees, and a Metal 512² five-frame smoke check
+with OpenGL error checks. All eight model/backend/geometry tests passed after the
+renderer update. The preview is in `docs/images/realistic-forest-fire.png`.
 
 The cell inspector downloads full state only when requested or while observing
 steps. It evaluates the same combined neighbor probability and captures the

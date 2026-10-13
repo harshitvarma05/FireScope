@@ -24,7 +24,7 @@ int main(int argc, char** argv) {
         SimulationConfig config;
         EnvironmentParams params;
         uint32_t steps = 500;
-        bool headless = false, smoke = false, triangle = false, benchmark = false;
+        bool headless = false, smoke = false, triangle = false, benchmark = false, showcase = false;
         std::string backendName="cpu";
         for (int i = 1; i < argc; ++i) {
             std::string arg = argv[i];
@@ -40,6 +40,7 @@ int main(int argc, char** argv) {
             }
             else if (arg == "--smoke-test") smoke = true;
             else if (arg == "--triangle") triangle = true;
+            else if (arg == "--showcase") showcase = true;
             else if (arg == "--backend") {
                 backendName=value();
             } else if (arg == "--grid") config.width = config.height = number(value(), 2048);
@@ -47,7 +48,7 @@ int main(int argc, char** argv) {
             else if (arg == "--steps") steps = number(value(), 1000000);
             else if (arg == "--help") {
                 std::cout << "FireScope [--backend cpu|cuda|metal] [--grid 1..2048] [--seed N] [--steps N]\n"
-                             "          [--headless] [--benchmark] [--list-backends] [--triangle] [--smoke-test]\n";
+                             "          [--headless] [--benchmark] [--list-backends] [--triangle] [--smoke-test] [--showcase]\n";
                 return 0;
             } else throw std::invalid_argument("Unknown option: " + arg);
         }
@@ -80,7 +81,7 @@ int main(int argc, char** argv) {
             return 0;
         }
 #ifdef FIRESCOPE_BUILD_GUI
-        return triangle ? runTriangle(smoke) : runGui(config, params, smoke, backendName);
+        return triangle ? runTriangle(smoke) : runGui(config, params, smoke, backendName, showcase);
 #else
         throw std::invalid_argument("GUI was disabled at build time; use --headless");
 #endif

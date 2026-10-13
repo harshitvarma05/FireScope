@@ -25,7 +25,7 @@ float shadow(vec3 normal) {
     vec4 light = lightMatrix*vec4(worldPosition,1);
     vec3 p = light.xyz/light.w*0.5+0.5;
     if (p.z>1 || p.z<0 || any(lessThan(p.xy,vec2(0))) || any(greaterThan(p.xy,vec2(1)))) return 1;
-    float bias = max(0.00008,0.0004*(1-dot(normal,normalize(vec3(-0.4,0.85,0.3)))));
+    float bias = max(0.00008,0.0004*(1-dot(normal,normalize(vec3(-0.65,0.48,0.57)))));
     float visible = 0;
     vec2 texel = 1.0/vec2(textureSize(shadowMap,0));
     for (int x=-1;x<=1;++x) for (int y=-1;y<=1;++y)
@@ -45,13 +45,21 @@ void main() {
     vec3 c=soil;
     if (state==1) c=mix(soil,grass,properties.g*(1-smoothstep(0.65,0.84,noise(worldPosition.xz*0.17))));
     c=mix(c,rock,smoothstep(0.12,0.42,1.0-n.y));
-    if (state==3) c=mix(vec3(0.075,0.067,0.054),vec3(0.18,0.16,0.13),mottling);
+    if (state==3) c=mix(vec3(0.025,0.022,0.018),vec3(0.11,0.095,0.075),mottling);
     float visibility=shadow(n);
-    float diffuse=max(dot(n,normalize(vec3(-0.4,0.85,0.3))),0);
+    c=pow(max(c,vec3(0)),vec3(2.2));
+    float diffuse=max(dot(n,normalize(vec3(-0.65,0.48,0.57))),0);
     c *= vec3(0.58,0.64,0.68)*0.55+vec3(1.0,0.87,0.68)*diffuse*visibility*0.85;
-    if (state==2) c=mix(c,vec3(0.58,0.14,0.018),0.7)+vec3(0.45,0.17,0.015)*data.g;
-    float fog=1-exp(-max(length(worldPosition-cameraPosition)-sceneScale*0.65,0.0)/sceneScale*0.085);
-    c=mix(c,vec3(0.69,0.76,0.78),clamp(fog,0,0.45));
+    float nearbyFire=0;
+    for (int dx=-1;dx<=1;++dx) for (int dy=-1;dy<=1;++dy) {
+        vec2 fire=texture(grid,uv+vec2(dx,dy)/gridSize).rg;
+        nearbyFire+=(int(round(fire.r*255))==2 ? fire.g : 0)/(1+float(dx*dx+dy*dy));
+    }
+    c+=vec3(0.32,0.062,0.003)*nearbyFire;
+    if (state==2) {
+        float fissure=pow(noise(worldPosition.xz*7),9);
+        c=mix(c,vec3(0.035,0.022,0.014),0.5)+vec3(3.0,0.48,0.015)*fissure*data.g;
+    }
     if (moistureOverlay!=0) c=mix(c,vec3(0.12,0.43,0.75),properties.r*0.75);
     vec2 cell=uv*gridSize;
     if (showGrid!=0) {

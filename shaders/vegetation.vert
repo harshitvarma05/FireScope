@@ -13,17 +13,21 @@ out vec3 surfaceNormal;
 out vec3 worldPosition;
 out vec3 treeColor;
 out vec3 leaf;
+out float heat;
 void main() {
     vec2 data=texture(grid,detail.yz).rg;
     int state=int(round(data.r*255));
     float c=cos(detail.x),s=sin(detail.x);
     mat3 rotation=mat3(c,0,-s, 0,1,0, s,0,c);
     vec3 local=position;
+    local.y*=0.8+detail.w*0.55;
+    local.xz*=1.1-detail.w*0.25;
     local.x += sin(visualTime*1.5+detail.x+position.y)*0.025*position.y*materialUV.z;
     vec3 world=originScale.xyz+rotation*local*originScale.w;
     worldPosition=world;
     surfaceNormal=rotation*normal;
     leaf=materialUV;
+    heat=state==2 ? data.g : 0;
     treeColor=materialUV.z<0.5 ? vec3(0.28,0.19,0.105) :
         mix(vec3(0.13,0.23,0.06),vec3(0.29,0.37,0.12),detail.w);
     if (state==2) treeColor=mix(vec3(0.085,0.067,0.05),treeColor,data.g);

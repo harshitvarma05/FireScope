@@ -116,6 +116,11 @@ OpenGLRenderer::OpenGLRenderer() {
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,0x812F); glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,0x812F);
     skyProgram_ = program(shaders::skyVertex,shaders::skyFragment);
+    postProgram_ = program(shaders::skyVertex,shaders::postFragment);
+    bloomProgram_ = program(shaders::skyVertex,shaders::bloomFragment);
+    gl::GenFramebuffers(1,&sceneFbo_);
+    glGenTextures(1,&sceneTexture_); glGenTextures(1,&sceneDepth_);
+    gl::GenFramebuffers(2,bloomFbo_); glGenTextures(2,bloomTexture_);
     gl::GenFramebuffers(1,&shadowFbo_); gl::BindFramebuffer(0x8D40,shadowFbo_);
     glGenTextures(1,&shadowTexture_); glBindTexture(GL_TEXTURE_2D,shadowTexture_);
     glTexImage2D(GL_TEXTURE_2D,0,0x81A6,2048,2048,0,GL_DEPTH_COMPONENT,GL_FLOAT,nullptr);
@@ -154,6 +159,9 @@ OpenGLRenderer::OpenGLRenderer() {
     lastVisualTime_ = glfwGetTime();
 }
 OpenGLRenderer::~OpenGLRenderer() {
+    gl::DeleteProgram(postProgram_); gl::DeleteProgram(bloomProgram_);
+    gl::DeleteFramebuffers(1,&sceneFbo_); gl::DeleteFramebuffers(2,bloomFbo_);
+    glDeleteTextures(1,&sceneTexture_); glDeleteTextures(1,&sceneDepth_); glDeleteTextures(2,bloomTexture_);
     for (auto buffer : {treeMesh_,treeInstances_,particleMesh_,particleInstances_}) gl::DeleteBuffers(1,&buffer);
     gl::DeleteVertexArrays(1,&treeVao_); gl::DeleteVertexArrays(1,&particleVao_);
     gl::DeleteProgram(treeProgram_); gl::DeleteProgram(particleProgram_); gl::DeleteProgram(skyProgram_);
@@ -182,8 +190,8 @@ void OpenGLRenderer::setTerrain(const SimulationConfig& config, const InitialGri
     const auto center = glm::vec3(0,terrain_.centerHeight(),0);
     lightMatrix_ = glm::ortho(-sceneScale_*0.78f,sceneScale_*0.78f,-sceneScale_*0.78f,sceneScale_*0.78f,
                              sceneScale_*0.1f,sceneScale_*4.0f)*
-        glm::lookAt(center+glm::normalize(glm::vec3(-0.4f,0.85f,0.3f))*sceneScale_*2.0f,center,glm::vec3(0,1,0));
-    smoke_.clear(); burning_.clear(); emission_ = 0; spawnRemainder_ = 0;
+        glm::lookAt(center+glm::normalize(glm::vec3(-0.65f,0.48f,0.57f))*sceneScale_*2.0f,center,glm::vec3(0,1,0));
+    smoke_.clear(); embers_.clear(); burning_.clear(); emission_ = 0; spawnRemainder_ = 0;
     lastVisualTime_ = glfwGetTime();
     cellPositions_.resize(static_cast<size_t>(config.width)*config.height);
     refreshProperties(config,grid,true);
@@ -238,6 +246,8 @@ void OpenGLRenderer::refreshProperties(const SimulationConfig& config, const Gri
 }
 void OpenGLRenderer::draw(int x, int y, int width, int height, const Camera& camera, bool gridLines,
                           const std::optional<TerrainHit>& hover, int radius, int brushTool, const EnvironmentParams& params, bool vegetation, bool particles, bool moistureOverlay) {
+    if (width<=0 || height<=0) return;
+    resizeTargets(width,height);
     moistureOverlay_ = moistureOverlay;
     const auto model = glm::mat4(1), view = camera.view(), projection = camera.projection(static_cast<float>(width)/height);
     glEnable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDepthFunc(GL_LESS); glDepthMask(GL_TRUE);
@@ -252,12 +262,13 @@ void OpenGLRenderer::draw(int x, int y, int width, int height, const Camera& cam
     gl::UniformMatrix4fv(gl::GetUniformLocation(program_,"projection"),1,GL_FALSE,glm::value_ptr(lightMatrix_));
     gl::BindVertexArray(vao_); glDrawElements(GL_TRIANGLES,static_cast<int>(terrain_.indices().size()),GL_UNSIGNED_INT,nullptr);
     if (vegetation) drawTrees(lightMatrix_,camera,true);
-    glDisable(GL_POLYGON_OFFSET_FILL); gl::BindFramebuffer(0x8D40,0);
-    glViewport(x,y,width,height);
+    glDisable(GL_POLYGON_OFFSET_FILL); gl::BindFramebuffer(0x8D40,sceneFbo_);
+    glViewport(0,0,width,height); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); gl::UseProgram(skyProgram_);
     const auto inverse = glm::inverse(projection*view); const auto eye = camera.position();
     gl::UniformMatrix4fv(gl::GetUniformLocation(skyProgram_,"inverseViewProjection"),1,GL_FALSE,glm::value_ptr(inverse));
     gl::Uniform3f(gl::GetUniformLocation(skyProgram_,"cameraPosition"),eye.x,eye.y,eye.z);
+    gl::Uniform1f(gl::GetUniformLocation(skyProgram_,"visualTime"),static_cast<float>(std::fmod(glfwGetTime(),1000)));
     gl::BindVertexArray(vao_); glDrawArrays(GL_TRIANGLES,0,3);
     glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
     gl::ActiveTexture(0x84C1); glBindTexture(GL_TEXTURE_2D,shadowTexture_);
@@ -277,6 +288,74 @@ void OpenGLRenderer::draw(int x, int y, int width, int height, const Camera& cam
     gl::BindVertexArray(vao_);
     glDrawElements(GL_TRIANGLES,static_cast<int>(terrain_.indices().size()),GL_UNSIGNED_INT,nullptr);
     drawEffects(camera,projection*view,params,vegetation,particles);
+    composite(x,y,width,height,camera,inverse);
+}
+void OpenGLRenderer::resizeTargets(int width, int height) {
+    if (targetWidth_==width && targetHeight_==height) return;
+    targetWidth_=width; targetHeight_=height;
+    // RGBA16F preserves emissive fire energy until tone mapping. Depth remains
+    // available to the atmospheric pass; the GUI is drawn after compositing.
+    auto allocate = [](unsigned texture,int w,int h,bool depth) {
+        glBindTexture(GL_TEXTURE_2D,texture);
+        glTexImage2D(GL_TEXTURE_2D,0,depth ? 0x81A6 : 0x881A,w,h,0,
+                     depth ? GL_DEPTH_COMPONENT : GL_RGBA,GL_FLOAT,nullptr);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,depth ? GL_NEAREST : GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,depth ? GL_NEAREST : GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,0x812F);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,0x812F);
+    };
+    gl::ActiveTexture(0x84C0);
+    allocate(sceneTexture_,width,height,false); allocate(sceneDepth_,width,height,true);
+    gl::BindFramebuffer(0x8D40,sceneFbo_);
+    gl::FramebufferTexture2D(0x8D40,0x8CE0,GL_TEXTURE_2D,sceneTexture_,0);
+    gl::FramebufferTexture2D(0x8D40,0x8D00,GL_TEXTURE_2D,sceneDepth_,0);
+    glDrawBuffer(0x8CE0); glReadBuffer(0x8CE0);
+    if (gl::CheckFramebufferStatus(0x8D40)!=0x8CD5) throw std::runtime_error("HDR framebuffer is incomplete");
+    for (int i=0;i<2;++i) {
+        allocate(bloomTexture_[i],std::max(1,width/2),std::max(1,height/2),false);
+        gl::BindFramebuffer(0x8D40,bloomFbo_[i]);
+        gl::FramebufferTexture2D(0x8D40,0x8CE0,GL_TEXTURE_2D,bloomTexture_[i],0);
+        glDrawBuffer(0x8CE0); glReadBuffer(0x8CE0);
+        if (gl::CheckFramebufferStatus(0x8D40)!=0x8CD5) throw std::runtime_error("Bloom framebuffer is incomplete");
+    }
+    gl::BindFramebuffer(0x8D40,0);
+}
+void OpenGLRenderer::composite(int x,int y,int width,int height,const Camera& camera,const glm::mat4& inverse) {
+    glDisable(GL_DEPTH_TEST); glDepthMask(GL_FALSE); glDisable(GL_BLEND);
+    gl::BindVertexArray(vao_); gl::ActiveTexture(0x84C0);
+    if (cinematic && bloomStrength>0) {
+        gl::UseProgram(bloomProgram_);
+        gl::Uniform1i(gl::GetUniformLocation(bloomProgram_,"source"),0);
+        for (int pass=0;pass<6;++pass) {
+            gl::BindFramebuffer(0x8D40,bloomFbo_[pass%2]);
+            glViewport(0,0,std::max(1,width/2),std::max(1,height/2));
+            glBindTexture(GL_TEXTURE_2D,pass==0 ? sceneTexture_ : bloomTexture_[(pass-1)%2]);
+            gl::Uniform1i(gl::GetUniformLocation(bloomProgram_,"extractBright"),pass==0 ? 1 : 0);
+            gl::Uniform2f(gl::GetUniformLocation(bloomProgram_,"direction"),
+                          pass%2==0 ? 2.0f/width : 0,pass%2!=0 ? 2.0f/height : 0);
+            glDrawArrays(GL_TRIANGLES,0,3);
+        }
+    }
+    gl::BindFramebuffer(0x8D40,0); glViewport(x,y,width,height);
+    gl::UseProgram(postProgram_);
+    const unsigned textures[]={sceneTexture_,bloomTexture_[1],sceneDepth_,shadowTexture_};
+    const char* names[]={"scene","bloom","depthMap","shadowMap"};
+    for (int i=0;i<4;++i) {
+        gl::ActiveTexture(0x84C0+i); glBindTexture(GL_TEXTURE_2D,textures[i]);
+        gl::Uniform1i(gl::GetUniformLocation(postProgram_,names[i]),i);
+    }
+    const auto eye=camera.position();
+    gl::Uniform3f(gl::GetUniformLocation(postProgram_,"cameraPosition"),eye.x,eye.y,eye.z);
+    gl::UniformMatrix4fv(gl::GetUniformLocation(postProgram_,"inverseViewProjection"),1,GL_FALSE,glm::value_ptr(inverse));
+    gl::UniformMatrix4fv(gl::GetUniformLocation(postProgram_,"lightMatrix"),1,GL_FALSE,glm::value_ptr(lightMatrix_));
+    gl::Uniform1f(gl::GetUniformLocation(postProgram_,"sceneScale"),sceneScale_);
+    gl::Uniform1f(gl::GetUniformLocation(postProgram_,"terrainHeight"),terrain_.centerHeight());
+    gl::Uniform1f(gl::GetUniformLocation(postProgram_,"exposure"),exposure);
+    gl::Uniform1f(gl::GetUniformLocation(postProgram_,"bloomStrength"),bloomStrength);
+    gl::Uniform1f(gl::GetUniformLocation(postProgram_,"atmosphere"),atmosphere);
+    gl::Uniform1i(gl::GetUniformLocation(postProgram_,"cinematic"),cinematic ? 1 : 0);
+    glDrawArrays(GL_TRIANGLES,0,3);
+    gl::ActiveTexture(0x84C0); glDepthMask(GL_TRUE);
 }
 void OpenGLRenderer::lightingUniforms(unsigned handle, const Camera& camera, bool shadow) {
     const auto eye = camera.position();
@@ -300,7 +379,13 @@ void OpenGLRenderer::drawEffects(const Camera& camera, const glm::mat4& viewProj
     if (vegetation) drawTrees(viewProjection,camera,false);
     const double now = glfwGetTime();
     const float dt = static_cast<float>(std::clamp(now-lastVisualTime_,0.0,0.1)); lastVisualTime_ = now;
-    if (!particles) { smoke_.clear(); spawnRemainder_ = 0; return; }
+    if (!particles) { smoke_.clear(); embers_.clear(); spawnRemainder_ = 0; return; }
+    for (auto& p : embers_) {
+        p.age+=dt;
+        p.position+=(p.velocity+glm::vec3(std::sin(p.age*4+p.size)*0.55f,0,std::cos(p.age*3)*0.55f))*dt;
+        p.velocity.y-=dt*0.18f;
+    }
+    embers_.erase(std::remove_if(embers_.begin(),embers_.end(),[](const Smoke& p) { return p.age>=p.lifetime; }),embers_.end());
     for (auto& particle : smoke_) {
         particle.age += dt;
         const float turbulence = std::sin(particle.age*2.5f+particle.lifetime)*0.12f;
@@ -318,10 +403,14 @@ void OpenGLRenderer::drawEffects(const Camera& camera, const glm::mat4& viewProj
             glm::vec3 velocity{std::cos(params.windDirectionRadians)*params.windSpeed/params.cellSizeMeters,
                                1.25f+r*0.8f,-std::sin(params.windDirectionRadians)*params.windSpeed/params.cellSizeMeters};
             smoke_.push_back({cellPositions_[cell]+glm::vec3(0,1.25f,0),velocity,0,7+r*5,0.6f+r*0.5f});
+            if (embers_.size()<1400 && h%3==0) {
+                auto drift=velocity*0.55f; drift.y=2.4f+r*2.0f;
+                embers_.push_back({cellPositions_[cell]+glm::vec3(r-0.5f,1.4f,0),drift,0,2+r*3,0.025f+r*0.045f});
+            }
         }
         spawnRemainder_ = std::min(spawnRemainder_,1.0f);
     } else spawnRemainder_ = 0;
-    std::vector<Instance> instances; instances.reserve(smoke_.size()+4096);
+    std::vector<Instance> instances; instances.reserve(smoke_.size()+embers_.size()+6144);
     const size_t stride = std::max(size_t(1),(burning_.size()+2047)/2048);
     for (size_t i = 0; i < burning_.size(); i += stride) {
         const size_t cell = burning_[i];
@@ -329,13 +418,18 @@ void OpenGLRenderer::drawEffects(const Camera& camera, const glm::mat4& viewProj
         const float intensity = intensity_[cell]/255.0f;
         instances.push_back({glm::vec4(cellPositions_[cell]+glm::vec3(0,2.0f,0),0.85f+0.1f*std::sin(phase)),
                              {0,0,intensity,0.96f}});
+        const float offset=std::sin(static_cast<float>(cell)*2.4f)*0.45f;
+        instances.push_back({glm::vec4(cellPositions_[cell]+glm::vec3(offset,1.4f,-offset),0.48f+intensity*0.24f),
+                             {0,0,intensity+0.37f,0.85f}});
         instances.push_back({glm::vec4(cellPositions_[cell]+glm::vec3(0,0.35f,0),1.2f),{2,0,intensity,0.18f}});
     }
     for (const auto& p : smoke_) {
         const float age = p.age/p.lifetime;
         instances.push_back({glm::vec4(p.position,p.size+p.age*0.45f),
-                             {1,age,0,std::min(p.age*2,1.0f)*(1-age)*0.68f}});
+                             {1,age,0,std::min(p.age*2,1.0f)*(1-age)*0.48f}});
     }
+    for (const auto& p : embers_)
+        instances.push_back({glm::vec4(p.position,p.size),{3,p.age/p.lifetime,p.lifetime,(1-p.age/p.lifetime)*0.95f}});
     const auto eye = camera.position();
     std::sort(instances.begin(),instances.end(),[&](const Instance& a,const Instance& b) {
         auto da = glm::vec3(a.positionSize)-eye, db = glm::vec3(b.positionSize)-eye;

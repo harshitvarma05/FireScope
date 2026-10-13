@@ -12,6 +12,8 @@ public:
     void setTerrain(const SimulationConfig&, const InitialGrid&, float cellSizeMeters);
     void refreshProperties(const SimulationConfig&, const GridData&, bool rebuildForest);
     const TerrainMesh& terrain() const { return terrain_; }
+    bool cinematic = true;
+    float exposure = 1.15f, bloomStrength = 0.22f, atmosphere = 0.35f;
     void draw(int x, int y, int width, int height, const Camera&, bool gridLines,
               const std::optional<TerrainHit>& hover, int radius, int brushTool, const EnvironmentParams&, bool vegetation, bool particles, bool moistureOverlay);
 private:
@@ -22,6 +24,11 @@ private:
     struct Smoke { glm::vec3 position, velocity; float age, lifetime, size; };
     unsigned treeProgram_ = 0, particleProgram_ = 0, skyProgram_ = 0;
     unsigned shadowFbo_ = 0, shadowTexture_ = 0;
+    unsigned sceneFbo_ = 0, sceneTexture_ = 0, sceneDepth_ = 0;
+    unsigned bloomFbo_[2]{}, bloomTexture_[2]{}, postProgram_ = 0, bloomProgram_ = 0;
+    int targetWidth_ = 0, targetHeight_ = 0;
+    void resizeTargets(int, int);
+    void composite(int, int, int, int, const Camera&, const glm::mat4&);
     glm::mat4 lightMatrix_{1};
     float sceneScale_ = 128;
     bool moistureOverlay_ = false;
@@ -34,6 +41,7 @@ private:
     std::vector<size_t> burning_;
     std::vector<uint8_t> intensity_;
     std::vector<Smoke> smoke_;
+    std::vector<Smoke> embers_;
     double lastVisualTime_ = 0;
     float spawnRemainder_ = 0;
     uint32_t emission_ = 0;

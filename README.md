@@ -53,7 +53,9 @@ into the sources and CMake configuration but requires Windows validation.
   burning and burned cells. Tree instances refresh when the stroke ends.
 - Moisture overlay tints terrain and foliage blue according to actual cell moisture.
   Selecting Water enables it; the checkbox can turn it off.
-- Steps per frame: 1 / 2 / 4 / 8; compact render state downloaded once per frame.
+- Updates per playback tick: 1 / 2 / 4 / 8; compact render state downloaded once per frame.
+  Play is paced at 12 ticks/s by default; adjust Playback ticks/s under Cinematic
+  lighting. The batch size applies to each tick; Step advances one update.
 - Burning, burned, unburned and no-fuel counts, timestep, timing and FPS.
 - Orbit camera: right-drag to rotate, middle-drag to pan, scroll to zoom.
 - Free-fly camera: right-drag to look, WASD to move, Q/E down/up.
@@ -63,6 +65,19 @@ into the sources and CMake configuration but requires Windows validation.
   flames, glow and wind-driven smoke. Trees lose foliage as cells burn.
 - Forest view gives a closer, lower-angle orbit view; Reset view restores full framing.
 - Terrain uses procedural soil/grass/rock detail, directional shadows and atmospheric haze.
+- Cinematic lighting adds an HDR scene buffer, half-resolution bloom, filmic tone
+  mapping and depth-aware, shadowed atmospheric light shafts. Exposure, Bloom and
+  Atmosphere are adjustable; disable Bloom / light shafts to reduce graphics cost.
+- The sky includes drifting clouds and layered distant mountain silhouettes.
+  These are scenery outside the simulated grid. Foliage has warm transmitted light,
+  varied proportions and cool shaded interiors; fire lights nearby ground and trees.
+- Flames have overlapping tongues and HDR glow; bounded rising embers accompany
+  the wind-driven smoke. These effects do not alter simulation state.
+- Cinematic view selects a low camera angle. Slow orbit rotates the orbit camera;
+  manual rotate/pan stops it. F10 hides/shows the interface and disables painting
+  while hidden, leaving camera controls available.
+- Fire showcase (resets), under Cinematic lighting, resets the current scenario,
+  advances 55 updates and frames the fire. The CLI equivalent is `--showcase`.
 - A wind compass shows east/north direction and speed.
 - Inspect pauses on cell selection and shows state, fuel, moisture, elevation,
   vegetation, density, burn age, burning neighbors and combined ignition probability.
@@ -78,6 +93,18 @@ buffering. Ray picking intersects the actual terrain triangles before painting.
 
 Use `--triangle` to replay the original OpenGL/ImGui skeleton.
 Use `--smoke-test` to run five simulation/render frames and check OpenGL errors.
+This check also exercises HDR resizing, disabling/re-enabling cinematic effects
+and entering/leaving photo mode. Use `--showcase --smoke-test` to test an established fire.
+
+For the close cinematic preview:
+
+```sh
+./build/FireScope.app/Contents/MacOS/FireScope --backend metal --grid 128 --seed 42 --showcase
+```
+
+See [rendering details and visual verification](docs/VISUALS.md). The report/poster
+dated 7 October describe the earlier renderer; this visual upgrade is documented
+separately here.
 
 ## Headless CPU build
 

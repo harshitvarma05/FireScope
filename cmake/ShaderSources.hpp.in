@@ -8,4 +8,6 @@ inline constexpr const char* billboardVertex = R"FIRESCOPE(@FIRESCOPE_billboard_
 inline constexpr const char* billboardFragment = R"FIRESCOPE(@FIRESCOPE_billboard_FRAGMENT@)FIRESCOPE";
 inline constexpr const char* skyVertex = R"FIRESCOPE(@FIRESCOPE_sky_VERTEX@)FIRESCOPE";
 inline constexpr const char* skyFragment = R"FIRESCOPE(@FIRESCOPE_sky_FRAGMENT@)FIRESCOPE";
+inline constexpr const char* postFragment = R"FIRESCOPE(@FIRESCOPE_post_FRAGMENT@)FIRESCOPE";
+inline constexpr const char* bloomFragment = R"FIRESCOPE(@FIRESCOPE_bloom_FRAGMENT@)FIRESCOPE";
 }

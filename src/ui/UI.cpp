@@ -15,7 +15,7 @@
 #include <string>
 
 namespace firescope {
-int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initialParams, bool smokeTest, const std::string& initialBackend) {
+int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initialParams, bool smokeTest, const std::string& initialBackend, bool showcase) {
     glfwSetErrorCallback([](int code, const char* message) { std::cerr << "GLFW " << code << ": " << message << '\n'; });
     if (!glfwInit()) throw std::runtime_error("GLFW initialization failed");
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR,4); glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR,1);
@@ -40,6 +40,8 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
         RenderState renderState;
         Camera camera;
         bool gridLines = false, vegetation = true, particles = true, moistureOverlay = false;
+        bool photoMode = false, slowOrbit = false;
+        float playbackRate = 12.0f, playbackAccumulator = 0;
         std::optional<TerrainHit> hover;
         std::optional<ScenarioSnapshot> snapshot;
         std::optional<ComparisonResult> comparison;
@@ -60,7 +62,7 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
         reset();
         camera.frame(config.width,config.height,renderer.terrain().centerHeight());
         bool playing = false;
-        int brush = 0, radius = 2, stepsPerFrame = 1;
+        int brush = 0, radius = 2, stepsPerTick = 1;
         uint32_t seed = params.seed;
         float vegetationStrength = 0.65f, waterStrength = 0.25f;
         float windDegrees = params.windDirectionRadians * 180.0f / 3.14159265f;
@@ -78,13 +80,28 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             }
             backend->downloadGrid(inspectedGrid);
         };
+        auto fireShowcase = [&] {
+            playing = false; reset(); advance(55);
+            camera.setMode(CameraMode::Orbit); camera.frame(config.width,config.height,renderer.terrain().centerHeight());
+            camera.rotate(0,-90); camera.zoom(7);
+        };
+        if (showcase) fireShowcase();
         while (!glfwWindowShouldClose(window)) {
             glfwPollEvents();
+            if (smokeTest) {
+                // Exercise HDR target reallocation, the unfiltered path and photo
+                // mode in the same real OpenGL test, including return to the GUI.
+                if (frames==1) glfwSetWindowSize(window,1000,700);
+                renderer.cinematic=frames!=2;
+                photoMode=frames==2;
+            }
             int fw,fh,ww,wh; glfwGetFramebufferSize(window,&fw,&fh); glfwGetWindowSize(window,&ww,&wh);
             if (ww <= 0 || wh <= 0 || fw <= 0 || fh <= 0) { glfwWaitEventsTimeout(0.05); continue; }
             ImGui_ImplOpenGL3_NewFrame(); ImGui_ImplGlfw_NewFrame(); ImGui::NewFrame();
             if (ImGui::IsKeyPressed(ImGuiKey_Escape)) glfwSetWindowShouldClose(window,1);
+            if (ImGui::IsKeyPressed(ImGuiKey_F10)) photoMode = !photoMode;
             const float panelWidth = std::min(320.0f,static_cast<float>(ww) * 0.4f);
+            if (!photoMode) {
             ImGui::SetNextWindowPos(ImVec2(0,0)); ImGui::SetNextWindowSize(ImVec2(panelWidth,static_cast<float>(wh)));
             ImGui::Begin("FireScope",nullptr,ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
             ImGui::PushItemWidth(panelWidth * 0.48f);
@@ -117,9 +134,9 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             ImGui::SameLine(); if (ImGui::Button("Reset")) {
                 params.seed = seed; playing = false; reset();
             }
-            if (ImGui::BeginCombo("Steps/frame",std::to_string(stepsPerFrame).c_str())) {
+            if (ImGui::BeginCombo("Steps/tick",std::to_string(stepsPerTick).c_str())) {
                 for (int count : {1,2,4,8})
-                    if (ImGui::Selectable(std::to_string(count).c_str(),count == stepsPerFrame)) stepsPerFrame = count;
+                    if (ImGui::Selectable(std::to_string(count).c_str(),count == stepsPerTick)) stepsPerTick = count;
                 ImGui::EndCombo();
             }
             ImGui::Separator();
@@ -157,8 +174,23 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
                 camera.setMode(CameraMode::Orbit); camera.frame(config.width,config.height,renderer.terrain().centerHeight());
                 camera.rotate(0,-50); camera.zoom(5);
             }
+            ImGui::SameLine();
+            if (ImGui::Button("Cinematic view")) {
+                camera.setMode(CameraMode::Orbit); camera.frame(config.width,config.height,renderer.terrain().centerHeight());
+                camera.rotate(0,-120); camera.zoom(6);
+            }
             ImGui::Checkbox("Trees",&vegetation); ImGui::SameLine(); ImGui::Checkbox("Fire / smoke",&particles);
             ImGui::Checkbox("Moisture overlay",&moistureOverlay);
+            if (ImGui::CollapsingHeader("Cinematic lighting")) {
+                ImGui::Checkbox("Bloom / light shafts",&renderer.cinematic);
+                ImGui::SliderFloat("Exposure",&renderer.exposure,0.5f,2.0f,"%.2f");
+                ImGui::SliderFloat("Bloom",&renderer.bloomStrength,0.0f,0.6f,"%.2f");
+                ImGui::SliderFloat("Atmosphere",&renderer.atmosphere,0.0f,1.0f,"%.2f");
+                ImGui::Checkbox("Slow orbit",&slowOrbit);
+                ImGui::SliderFloat("Playback ticks/s",&playbackRate,1.0f,60.0f,"%.0f");
+                ImGui::TextDisabled("F10: hide/show controls");
+                if (ImGui::Button("Fire showcase (resets)")) fireShowcase();
+            }
             if (moistureOverlay) ImGui::TextDisabled("Blue = moisture: 0 dry / 1 wet");
             ImGui::TextWrapped("Right-drag: rotate. Middle-drag: pan. Scroll: zoom. Free fly: WASD, Q/E down/up.");
             if (ImGui::CollapsingHeader("Scenario comparison")) {
@@ -223,15 +255,17 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             ImGui::TextDisabled("Charcoal: burned / Brown: no fuel");
             ImGui::TextWrapped("Educational prototype. Parameters are uncalibrated.");
             ImGui::PopItemWidth(); ImGui::End();
+            }
 
-            const float left = panelWidth+12, top = 12;
-            const float viewWidth = std::max(1.0f,ww-left-12), viewHeight = std::max(1.0f,wh-24.0f);
+            const float left = photoMode ? 0 : panelWidth+12, top = photoMode ? 0 : 12;
+            const float viewWidth = std::max(1.0f,ww-left-(photoMode ? 0 : 12)), viewHeight = std::max(1.0f,wh-(photoMode ? 0 : 24.0f));
             const ImVec2 mouse = ImGui::GetMousePos();
             const float mx = mouse.x, my = mouse.y;
             const bool inView = mx >= left && mx < left+viewWidth && my >= top && my < top+viewHeight;
             const bool inputAllowed = inView && !ImGui::GetIO().WantCaptureMouse;
             const auto& io = ImGui::GetIO();
             if (inputAllowed) {
+                if (ImGui::IsMouseDown(1) || ImGui::IsMouseDown(2)) slowOrbit = false;
                 if (ImGui::IsMouseDown(1)) camera.rotate(io.MouseDelta.x,io.MouseDelta.y);
                 if (ImGui::IsMouseDown(2)) camera.pan(io.MouseDelta.x,io.MouseDelta.y);
                 if (io.MouseWheel != 0) camera.zoom(io.MouseWheel);
@@ -242,7 +276,8 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
                     camera.move(f,r,u,io.DeltaTime);
                 }
             }
-            hover = inputAllowed ? renderer.terrain().intersect(camera.screenRay(mx-left,my-top,viewWidth,viewHeight)) : std::nullopt;
+            if (slowOrbit && camera.mode()==CameraMode::Orbit) camera.rotate(io.DeltaTime*5,0);
+            hover = inputAllowed && !photoMode ? renderer.terrain().intersect(camera.screenRay(mx-left,my-top,viewWidth,viewHeight)) : std::nullopt;
             if (brush == 4 && hover && ImGui::IsMouseClicked(0)) {
                 playing = false; inspected = {{hover->x,hover->y}}; lastProbability.reset();
                 backend->downloadGrid(inspectedGrid);
@@ -277,10 +312,13 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
                 ImGui::End();
             }
             if (playing) {
-                advance(stepsPerFrame);
+                playbackAccumulator+=std::min(io.DeltaTime,0.1f)*playbackRate;
+                const auto ticks=static_cast<uint32_t>(playbackAccumulator);
+                if (ticks) { advance(ticks*stepsPerTick); playbackAccumulator-=ticks; }
                 if (!backend->stats().burning) playing = false;
-            }
+            } else playbackAccumulator=0;
             if (smokeTest) advance(1);
+            if (!photoMode) {
             ImGui::SetNextWindowPos(ImVec2(left+viewWidth-162,top+12));
             ImGui::SetNextWindowBgAlpha(0.65f);
             ImGui::Begin("Wind",nullptr,ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
@@ -297,7 +335,8 @@ int runGui(const SimulationConfig& initialConfig, const EnvironmentParams& initi
             draw->AddTriangleFilled(end,ImVec2(end.x-direction.x*8-direction.y*4,end.y-direction.y*8+direction.x*4),
                 ImVec2(end.x-direction.x*8+direction.y*4,end.y-direction.y*8-direction.x*4),IM_COL32(130,200,255,255));
             ImGui::Dummy(ImVec2(130,80)); ImGui::End();
-            if (inspected) {
+            }
+            if (inspected && !photoMode) {
                 ImGui::SetNextWindowPos(ImVec2(left+12,top+65),ImGuiCond_Always);
                 ImGui::SetNextWindowBgAlpha(0.85f);
                 bool open = true;

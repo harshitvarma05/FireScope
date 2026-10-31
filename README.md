@@ -134,27 +134,6 @@ use `--benchmark` for one warm-up plus five runs and median reporting.
 - M6: branching instanced trees, leaf cards, shadows, sky, detailed terrain, flame billboards, wind-driven smoke, wind compass and cell inspector implemented.
   CUDA shared-memory optimization, NVIDIA validation and final presentation checks remain.
 
-## Report and presentation material
-
-- Editable report: `output/documents/FireScope_Report.docx`.
-- Reviewed nine-page report PDF: `output/pdf/FireScope_Report.pdf`.
-- A2 landscape poster: `output/pdf/FireScope_Poster.pdf`.
-- [Demo sequence and technical rehearsal notes](docs/DEMO_GUIDE.md).
-- [Report prose source](docs/REPORT.md).
-
-The report follows all 19 sections in the specification. These files omit personal
-and college identifiers and mark CUDA validation/shared-memory optimization as
-pending. The backup demo video and projector checks remain outstanding.
-`scripts/create_deliverables.py` rebuilds the DOCX and poster from checked-in
-evidence using python-docx, ReportLab and Pillow. Set `FIRESCOPE_FONT_DIR` to a
-directory containing LiberationSans-Regular.ttf and LiberationSans-Bold.ttf on
-another machine. Render and inspect the DOCX before exporting its final PDF.
-
-See [architecture](docs/architecture.md), [model choices](docs/model.md), and
-[dependencies/attribution](THIRD_PARTY.md). No source from the referenced wildfire
-repositories has been copied. Repository licensing has not yet been selected by
-the team; third-party dependencies retain their own licenses.
-
 ## GPU validation and benchmark results
 
 ```sh
